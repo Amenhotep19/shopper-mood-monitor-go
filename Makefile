@@ -4,15 +4,14 @@ INSTALL=go install
 BUILDPATH=./build
 PACKAGES=$(shell go list ./... )
 
-CGO_CXXFLAGS="--std=c++11"
-CGO_CPPFLAGS="-I${INTEL_CVSDK_DIR}/opencv/include -I${INTEL_CVSDK_DIR}/deployment_tools/inference_engine/include"
-CGO_LDFLAGS="-L${INTEL_CVSDK_DIR}/opencv/lib -L${INTEL_CVSDK_DIR}/deployment_tools/inference_engine/lib/ubuntu_16.04/intel64 -lpthread -ldl -ldla -ldliaPlugin -lHeteroPlugin -lMKLDNNPlugin -lmyriadPlugin -linference_engine -lclDNNPlugin -lopencv_core -lopencv_pvl -lopencv_face -lopencv_videoio -lopencv_imgproc -lopencv_highgui -lopencv_imgcodecs -lopencv_objdetect -lopencv_features2d -lopencv_video -lopencv_dnn -lopencv_calib3d"
-PKG_CONFIG_PATH=/usr/lib64/pkgconfig
+#CGO_CXXFLAGS="--std=c++11"
+#CGO_CPPFLAGS="-I${INTEL_CVSDK_DIR}/opencv/include -I${INTEL_CVSDK_DIR}/deployment_tools/inference_engine/include"
+#CGO_LDFLAGS="-L${INTEL_CVSDK_DIR}/opencv/lib -L${INTEL_CVSDK_DIR}/deployment_tools/inference_engine/lib/ubuntu_16.04/intel64 -lpthread -ldl -ldla -ldliaPlugin -lHeteroPlugin -lMKLDNNPlugin -lmyriadPlugin -linference_engine -lclDNNPlugin -lopencv_core -lopencv_pvl -lopencv_videoio -lopencv_imgproc -lopencv_highgui -lopencv_imgcodecs -lopencv_objdetect -lopencv_features2d -lopencv_video -lopencv_dnn -lopencv_calib3d"
 
 all: test build
 
 build: dir
-	go build -o "$(BUILDPATH)/monitor" "main.go"
+	go build -tags openvino -o "$(BUILDPATH)/monitor" "main.go"
 
 dir:
 	mkdir -p $(BUILDPATH)

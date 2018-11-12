@@ -3,3 +3,4 @@ Vagrantfile
 build/
 *.mp4
 resources/
+vendor/
