@@ -3,9 +3,19 @@ package main
 import (
 	"flag"
 	"fmt"
+	"image"
+	"image/color"
 	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 
 	"gocv.io/x/gocv"
+)
+
+const (
+	// name is a program name
+	name = "shopper-mood-monitor"
 )
 
 var (
@@ -23,7 +33,7 @@ var (
 	sentModel string
 	// sentConfig is path to .xml file of sentiment model containing model configuration
 	sentConfig string
-	// sentConfidence is confidence factor for emotion detection required
+	// sentConfidence is confidence factor for sentiment detection
 	sentConfidence float64
 	// backend is inference backend
 	backend int
@@ -32,6 +42,57 @@ var (
 	// mqttRate is number of seconds between data updates to MQTT server
 	mqttRate int
 )
+
+// Sentiment is shopper sentiment
+type Sentiment int
+
+const (
+	// NEUTRAL is neutral emotion shopper
+	NEUTRAL Sentiment = iota + 1
+	// HAPPY is for detecting happy emotion
+	HAPPY
+	// SAD is for detecting sad emotion
+	SAD
+	// SURPRISED is for detecting neutral emotion
+	SURPRISED
+	// ANGER  is for detecting anger emotion
+	ANGER
+	// UNKNOWN is catchall unidentifiable emotion
+	UNKNOWN
+)
+
+// String implements fmt.Stringer interface for Sentiment
+func (s Sentiment) String() string {
+	switch s {
+	case NEUTRAL:
+		return "NEUTRAL"
+	case HAPPY:
+		return "HAPPY"
+	case SAD:
+		return "SAD"
+	case SURPRISED:
+		return "SURPRISED"
+	case ANGER:
+		return "ANGER"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+// Result is inference result
+type Result struct {
+	// Shoppers contains count of all detected faces of shoppers
+	Shoppers int
+	// Detections is a map which contains detected sentiment of each shopper
+	Detections map[Sentiment]int
+}
+
+// String implements fmt.Stringer interface for Result
+func (r Result) String() string {
+	return fmt.Sprintf("Shoppers: %d, Neutral: %d, Happy: %d, Sad: %d, Surprised: %d, Anger: %d, Unknown: %d",
+		r.Shoppers, r.Detections[NEUTRAL], r.Detections[HAPPY], r.Detections[SAD],
+		r.Detections[SURPRISED], r.Detections[ANGER], r.Detections[UNKNOWN])
+}
 
 func init() {
 	flag.IntVar(&deviceID, "device", 0, "Camera device ID")
@@ -53,19 +114,105 @@ func parseCliFlags() error {
 
 	// path to face detection model can't be empty
 	if faceModel == "" {
-		return fmt.Errorf("invalid path to .bin file of face detection model: %s", faceModel)
+		return fmt.Errorf("Invalid path to .bin file of face detection model: %s", faceModel)
 	}
 	// path to face detection model config can't be empty
 	if faceConfig == "" {
-		return fmt.Errorf("invalid path to .xml file of face detection model configuration: %s", faceConfig)
+		return fmt.Errorf("Invalid path to .xml file of face detection model configuration: %s", faceConfig)
 	}
 	// path to sentiment detection model can't be empty
 	if sentModel == "" {
-		return fmt.Errorf("invalid path to .bin file of sentiment detection model: %s", sentModel)
+		return fmt.Errorf("Invalid path to .bin file of sentiment detection model: %s", sentModel)
 	}
 	// path to sentiment detection model config can't be empty
 	if sentConfig == "" {
-		return fmt.Errorf("invalid path to .xml file of sentiment detection model configuration: %s", sentConfig)
+		return fmt.Errorf("Invalid path to .xml file of sentiment detection model configuration: %s", sentConfig)
+	}
+
+	return nil
+}
+
+// frameRunner reads image frames from framesChan and performs face and sentiment detections on them
+// doneChan is used to receive a signal from the main goroutine to notify frameRunner to stop and return
+func frameRunner(framesChan <-chan *gocv.Mat, doneChan <-chan struct{},
+	resultsChan chan Result, mqttChan chan string, faceNet, sentNet gocv.Net) error {
+	// TODO: might make these globals/constants
+	mean := gocv.NewScalar(0, 0, 0, 0)
+	swapRB := false
+	crop := false
+
+	for {
+		select {
+		case <-doneChan:
+			fmt.Printf("Stopping frameRunner: received stop sginal\n")
+			return nil
+		case frame := <-framesChan:
+			// let's make a copy of the original
+			img := gocv.NewMat()
+			frame.CopyTo(&img)
+
+			// convert img Mat to 672x384 blob that the face detector can analyze
+			blob := gocv.BlobFromImage(img, 1.0, image.Pt(672, 384), mean, swapRB, crop)
+
+			// feed the blob into the detector
+			faceNet.SetInput(blob, "")
+
+			// run a forward pass through the network
+			results := faceNet.Forward("")
+
+			// iterate through all detections and append results to faces buffer
+			var faces []image.Rectangle
+			for i := 0; i < results.Total(); i += 7 {
+				confidence := results.GetFloatAt(0, i+2)
+				if float64(confidence) > faceConfidence {
+					left := int(results.GetFloatAt(0, i+3) * float32(img.Cols()))
+					top := int(results.GetFloatAt(0, i+4) * float32(img.Rows()))
+					right := int(results.GetFloatAt(0, i+5) * float32(img.Cols()))
+					bottom := int(results.GetFloatAt(0, i+6) * float32(img.Rows()))
+					faces = append(faces, image.Rect(left, top, right, bottom))
+				}
+			}
+
+			sentMap := make(map[Sentiment]int)
+			// do the sentiment detection here
+			for i := range faces {
+				// make sure the face rect is completely inside the main frame
+				if !faces[i].In(image.Rect(0, 0, img.Cols(), img.Rows())) {
+					continue
+				}
+
+				// propagate the detected face forward through sentiment network
+				face := img.Region(faces[i])
+				sentBlob := gocv.BlobFromImage(face, 1.0, image.Pt(64, 64), mean, swapRB, crop)
+				sentNet.SetInput(sentBlob, "")
+				sentResult := sentNet.Forward("")
+				// flatten the result from [1, 5, 1, 1] to [1, 5]
+				sentResult = sentResult.Reshape(1, 5)
+				// find the most likely mood in returned list of sentiments
+				_, confidence, _, maxLoc := gocv.MinMaxLoc(sentResult)
+
+				var s Sentiment
+				if float64(confidence) > sentConfidence {
+					s = Sentiment(maxLoc.Y)
+				} else {
+					s = UNKNOWN
+				}
+				sentMap[s] += 1
+
+				sentBlob.Close()
+				sentResult.Close()
+			}
+
+			// send result down the channel
+			result := Result{
+				Shoppers:   len(faces),
+				Detections: sentMap,
+			}
+			// send results down the results channel
+			resultsChan <- result
+			img.Close()
+			results.Close()
+		}
 	}
 
 	return nil
@@ -74,38 +221,123 @@ func parseCliFlags() error {
 func main() {
 	// parse cli flags
 	if err := parseCliFlags(); err != nil {
-		fmt.Fprintf(os.Stderr, "\nERROR: %s\n", err)
+		fmt.Fprintf(os.Stderr, "\nError parsing command line parameters: %v\n", err)
 		os.Exit(1)
 	}
 
-	// open camera device
-	cam, err := gocv.VideoCaptureDevice(deviceID)
-	if err != nil {
-		fmt.Printf("error opening video capture device: %v\n", deviceID)
-		return
+	// read in Face model and set the backend and target
+	faceNet := gocv.ReadNet(faceModel, faceConfig)
+	if err := faceNet.SetPreferableBackend(gocv.NetBackendType(backend)); err != nil {
+		fmt.Fprintf(os.Stderr, "\nError setting backend for Face DNN: %v\n", err)
+		os.Exit(1)
 	}
-	defer cam.Close()
+	if err := faceNet.SetPreferableTarget(gocv.NetTargetType(target)); err != nil {
+		fmt.Fprintf(os.Stderr, "\nError setting target for Face DNN: %v\n", err)
+		os.Exit(1)
+	}
+
+	// read in Snetiment model and set the backend and target
+	sentNet := gocv.ReadNet(sentModel, sentConfig)
+	if err := sentNet.SetPreferableBackend(gocv.NetBackendType(backend)); err != nil {
+		fmt.Fprintf(os.Stderr, "\nError setting backend for Sentiment DNN: %v\n", err)
+		os.Exit(1)
+	}
+	if err := sentNet.SetPreferableTarget(gocv.NetTargetType(target)); err != nil {
+		fmt.Fprintf(os.Stderr, "\nError setting target for Sentiment DNN: %v\n", err)
+		os.Exit(1)
+	}
+
+	// vc is videocapture source: either camera or file
+	var vc *gocv.VideoCapture
+	var err error
+	if input != "" {
+		// open camera device
+		vc, err = gocv.VideoCaptureFile(input)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "\nError opening video capture file: %v\n", input)
+			os.Exit(1)
+		}
+	} else {
+		// open camera device
+		vc, err = gocv.VideoCaptureDevice(deviceID)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "\nError opening video capture device: %v\n", deviceID)
+			os.Exit(1)
+		}
+	}
+	defer vc.Close()
 
 	// open display window
-	window := gocv.NewWindow("OpenVINO window")
+	window := gocv.NewWindow(name)
 	defer window.Close()
 
 	// prepare input image matrix
 	img := gocv.NewMat()
 	defer img.Close()
 
-	fmt.Printf("start reading camera device: %v\n", deviceID)
+	fmt.Printf("Start reading frames from video capture source\n")
+
+	// frames channel provides the source of images to process
+	framesChan := make(chan *gocv.Mat, 1)
+	// errChan is a channel used to capture program errors
+	errChan := make(chan error, 2)
+	// doneChan is used to signal goroutines they need to stop
+	doneChan := make(chan struct{})
+	// resultsChan is used for detection distribution
+	resultsChan := make(chan Result, 1)
+	// mqttChan is used for collecting MQTT stats
+	mqttChan := make(chan string, 1)
+	// sigChan is used as a handler to stop all the goroutines
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, os.Kill, syscall.SIGTERM)
+
+	// waitgroup to synchronise all goroutines
+	var wg sync.WaitGroup
+
+	// start frameRunner goroutine
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		errChan <- frameRunner(framesChan, doneChan, resultsChan, mqttChan, faceNet, sentNet)
+	}()
+
+	// TODO: start MQTT goroutine here
+
+	var label string
+detector:
 	for {
-		if ok := cam.Read(&img); !ok {
-			fmt.Printf("cannot read device %v\n", deviceID)
-			return
+		// read image frames from image capture source
+		if ok := vc.Read(&img); !ok {
+			fmt.Printf("Cannot read image source %v\n", deviceID)
+			break
 		}
 		if img.Empty() {
 			continue
+		}
+
+		// send image down the pipe for detection
+		framesChan <- &img
+
+		select {
+		case sig := <-sigChan:
+			fmt.Printf("Shutting down. Got signal: %s\n", sig)
+			break detector
+		case err = <-errChan:
+			fmt.Printf("Shutting down. Failed with error: %s\n", err)
+			break detector
+		case result := <-resultsChan:
+			label = fmt.Sprintf("%s", result)
+			gocv.PutText(&img, label, image.Point{0, 40}, gocv.FontHersheySimplex, 0.5,
+				color.RGBA{0, 0, 0, 0}, 2)
 		}
 
 		// show the image in the window, and wait 1 millisecond
 		window.IMShow(img)
 		window.WaitKey(1)
 	}
+
+	// signal to all goroutines to finish
+	close(doneChan)
+	// wait for all goroutines to finish
+	wg.Wait()
 }
