@@ -36,7 +36,7 @@ check:
 
 test:
 	for pkg in ${PACKAGES}; do \
-		go test -coverprofile="../../../$$pkg/coverage.txt" -covermode=atomic $$pkg || exit; \
+		go test -tags openvino -coverprofile="../../../$$pkg/coverage.txt" -covermode=atomic $$pkg || exit; \
 	done
 
 .PHONY: clean build all
