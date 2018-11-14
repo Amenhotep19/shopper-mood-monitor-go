@@ -97,6 +97,7 @@ func MQTTClientOptions() (*MQTT.ClientOptions, error) {
 	opts.SetKeepAlive(20 * time.Second)
 	opts.CleanSession = true
 	opts.SetPingTimeout(1 * time.Second)
+	opts.SetDefaultPublishHandler(msgHandler)
 
 	if username != "" && password != "" {
 		opts.SetUsername(username)
@@ -148,7 +149,7 @@ func (c *MQTTClient) Publish(topic, message string) (MQTT.Token, error) {
 
 // msgHandler for MQTT subscription for any desired control channel topic
 func msgHandler(c MQTT.Client, msg MQTT.Message) {
-	fmt.Printf("MQTT message received: %s", msg.Topic())
+	fmt.Printf("MQTT message received. Topic: %s Message: %s", msg.Topic(), msg.Payload())
 }
 
 // Subscribe subscribes to specified topic

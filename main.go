@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"gocv.io/x/gocv"
 )
@@ -16,6 +17,8 @@ import (
 const (
 	// name is a program name
 	name = "shopper-mood-monitor"
+	// topic is MQTT topic
+	mqttTopic = "retail/traffic"
 )
 
 var (
@@ -94,6 +97,13 @@ func (r Result) String() string {
 		r.Detections[SURPRISED], r.Detections[ANGER], r.Detections[UNKNOWN])
 }
 
+// ToMQTTMessage turns result into MQTT message which can be published to MQTT broker
+func (r Result) ToMQTTMessage() string {
+	return fmt.Sprintf("{\"shoppers\": \"%d\", \"neutral\": \"%d\", \"happy\": \"%d\", \"sad\": \"%d\", \"surprised\": \"%d\", \"anger\": \"%d\", \"unknown\": \"%d\"}",
+		r.Shoppers, r.Detections[NEUTRAL], r.Detections[HAPPY], r.Detections[SAD],
+		r.Detections[SURPRISED], r.Detections[ANGER], r.Detections[UNKNOWN])
+}
+
 func init() {
 	flag.IntVar(&deviceID, "device", 0, "Camera device ID")
 	flag.StringVar(&input, "input", "", "Path to image or video file")
@@ -132,10 +142,37 @@ func parseCliFlags() error {
 	return nil
 }
 
+// messageRunner reads mqtt message from mqttChan with rate frequency and sends them to MQTT server
+// doneChan is used to receive a signal from the main goroutine to notify messageRunner to stop and return
+func messageRunner(doneChan <-chan struct{}, mqttChan <-chan Result, c *MQTTClient, topic string, rate int) error {
+	ticker := time.NewTicker(time.Duration(rate) * time.Second)
+
+	for {
+		select {
+		case <-ticker.C:
+			result := <-mqttChan
+			_, err := c.Publish(topic, result.ToMQTTMessage())
+			// TODO: decide whether to return with error and stop program;
+			// For now we just signal there was an error and carry on
+			if err != nil {
+				fmt.Printf("Error publishing message to %s: %v", topic, err)
+			}
+		//case res := <-mqttChan:
+		case <-mqttChan:
+			// we discard messages in between ticker times
+		case <-doneChan:
+			fmt.Printf("Stopping messageRunner: received stop sginal\n")
+			return nil
+		}
+	}
+
+	return nil
+}
+
 // frameRunner reads image frames from framesChan and performs face and sentiment detections on them
 // doneChan is used to receive a signal from the main goroutine to notify frameRunner to stop and return
 func frameRunner(framesChan <-chan *gocv.Mat, doneChan <-chan struct{},
-	resultsChan chan Result, mqttChan chan string, faceNet, sentNet gocv.Net) error {
+	resultsChan chan Result, mqttChan chan Result, faceNet, sentNet gocv.Net) error {
 	// TODO: might make these globals/constants
 	mean := gocv.NewScalar(0, 0, 0, 0)
 	swapRB := false
@@ -208,8 +245,9 @@ func frameRunner(framesChan <-chan *gocv.Mat, doneChan <-chan struct{},
 				Shoppers:   len(faces),
 				Detections: sentMap,
 			}
-			// send results down the results channel
+			// send results down the results and mqtt channels
 			resultsChan <- result
+			mqttChan <- result
 			img.Close()
 			results.Close()
 		}
@@ -221,29 +259,29 @@ func frameRunner(framesChan <-chan *gocv.Mat, doneChan <-chan struct{},
 func main() {
 	// parse cli flags
 	if err := parseCliFlags(); err != nil {
-		fmt.Fprintf(os.Stderr, "\nError parsing command line parameters: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error parsing command line parameters: %v\n", err)
 		os.Exit(1)
 	}
 
 	// read in Face model and set the backend and target
 	faceNet := gocv.ReadNet(faceModel, faceConfig)
 	if err := faceNet.SetPreferableBackend(gocv.NetBackendType(backend)); err != nil {
-		fmt.Fprintf(os.Stderr, "\nError setting backend for Face DNN: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error setting backend for Face DNN: %v\n", err)
 		os.Exit(1)
 	}
 	if err := faceNet.SetPreferableTarget(gocv.NetTargetType(target)); err != nil {
-		fmt.Fprintf(os.Stderr, "\nError setting target for Face DNN: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error setting target for Face DNN: %v\n", err)
 		os.Exit(1)
 	}
 
 	// read in Snetiment model and set the backend and target
 	sentNet := gocv.ReadNet(sentModel, sentConfig)
 	if err := sentNet.SetPreferableBackend(gocv.NetBackendType(backend)); err != nil {
-		fmt.Fprintf(os.Stderr, "\nError setting backend for Sentiment DNN: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error setting backend for Sentiment DNN: %v\n", err)
 		os.Exit(1)
 	}
 	if err := sentNet.SetPreferableTarget(gocv.NetTargetType(target)); err != nil {
-		fmt.Fprintf(os.Stderr, "\nError setting target for Sentiment DNN: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error setting target for Sentiment DNN: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -254,14 +292,14 @@ func main() {
 		// open camera device
 		vc, err = gocv.VideoCaptureFile(input)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "\nError opening video capture file: %v\n", input)
+			fmt.Fprintf(os.Stderr, "Error opening video capture file: %v\n", input)
 			os.Exit(1)
 		}
 	} else {
 		// open camera device
 		vc, err = gocv.VideoCaptureDevice(deviceID)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "\nError opening video capture device: %v\n", deviceID)
+			fmt.Fprintf(os.Stderr, "Error opening video capture device: %v\n", deviceID)
 			os.Exit(1)
 		}
 	}
@@ -286,7 +324,7 @@ func main() {
 	// resultsChan is used for detection distribution
 	resultsChan := make(chan Result, 1)
 	// mqttChan is used for collecting MQTT stats
-	mqttChan := make(chan string, 1)
+	mqttChan := make(chan Result, 1)
 	// sigChan is used as a handler to stop all the goroutines
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, os.Kill, syscall.SIGTERM)
@@ -301,7 +339,26 @@ func main() {
 		errChan <- frameRunner(framesChan, doneChan, resultsChan, mqttChan, faceNet, sentNet)
 	}()
 
-	// TODO: start MQTT goroutine here
+	// create MQTT client and connect to MQTT server
+	opts, err := MQTTClientOptions()
+	if err != nil {
+		fmt.Printf("%v\n", err)
+		fmt.Printf("Have you set the ENV variables?\n")
+	} else {
+		mqttClient, err := MQTTConnect(opts)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error connecting to MQTT broker %s: %v\n",
+				os.Getenv("MQTT_SERVER"), err)
+			os.Exit(1)
+		}
+		// start MQTT worker goroutine
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errChan <- messageRunner(doneChan, mqttChan, mqttClient, mqttTopic, mqttRate)
+		}()
+		defer mqttClient.Disconnect(100)
+	}
 
 	var label string
 detector:
