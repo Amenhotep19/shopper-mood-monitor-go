@@ -94,11 +94,14 @@ func MQTTClientOptions() (*MQTT.ClientOptions, error) {
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(server)
 	opts.SetClientID(clientID)
-	opts.SetUsername(username)
-	opts.SetPassword(password)
 	opts.SetKeepAlive(20 * time.Second)
 	opts.CleanSession = true
 	opts.SetPingTimeout(1 * time.Second)
+
+	if username != "" && password != "" {
+		opts.SetUsername(username)
+		opts.SetPassword(password)
+	}
 
 	var skipVerify bool
 	if tlsSkipVerify != "" {
@@ -120,6 +123,10 @@ func MQTTClientOptions() (*MQTT.ClientOptions, error) {
 // It returns error if it fails to connect to the MQTT server.
 func MQTTConnect(opts *MQTT.ClientOptions) (*MQTTClient, error) {
 	c := MQTT.NewClient(opts)
+
+	if token := c.Connect(); token.Wait() && token.Error() != nil {
+		return nil, token.Error()
+	}
 
 	return &MQTTClient{
 		client: c,
@@ -155,4 +162,9 @@ func (c *MQTTClient) Subscribe(topic string) (MQTT.Token, error) {
 	}
 
 	return token, nil
+}
+
+// Disconnect closes the connection to MQTT broker, waiting for pending ms.
+func (c *MQTTClient) Disconnect(pending uint) {
+	c.client.Disconnect(pending)
 }
