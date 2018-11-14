@@ -145,15 +145,17 @@ To then execute the code using one of these sample videos, run the following com
 
 If you wish to use a MQTT server to publish data, you should set the following environment variables before running the program:
 ```
-    export MQTT_SERVER=localhost:1883
-    export MQTT_CLIENT_ID=cvservice
+    export MQTT_SERVER=tcp://localhost:1883
+    export MQTT_CLIENT_ID=shopper123
 ```
+
+*Note:* You must always specify the server protocol -- the above example is using `TCP` protocol.
 
 Change the `MQTT_SERVER` to a value that matches the MQTT server you are connecting to.
 
 You should change the `MQTT_CLIENT_ID` to a unique value for each monitoring station, so you can track the data for individual locations. For example:
 ```
-    export MQTT_CLIENT_ID=shelf1337
+    export MQTT_CLIENT_ID=hopper123
 ```
 
 If you want to monitor the MQTT messages sent to your local server, and you have the `mosquitto` client utilities installed, you can run the following command:
