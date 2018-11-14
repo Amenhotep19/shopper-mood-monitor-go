@@ -2,14 +2,33 @@
 
 
 [[projects]]
+  name = "github.com/eclipse/paho.mqtt.golang"
+  packages = [
+    ".",
+    "packets"
+  ]
+  revision = "36d01c2b4cbeb3d2a12063e4880ce30800af9560"
+  version = "v1.1.1"
+
+[[projects]]
   name = "gocv.io/x/gocv"
   packages = ["."]
   revision = "bc016e27fba3560070e16affd605768d68110867"
   version = "v0.17.0"
 
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/net"
+  packages = [
+    "internal/socks",
+    "proxy",
+    "websocket"
+  ]
+  revision = "88d92db4c548972d942ac2a3531a8a9a34c82ca6"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "3962715387bf39d4defb8f97f1cf8d349c9d3f687e5d405bcbecd72c759e803a"
+  inputs-digest = "da1c5e4b7e0c3ad074b770bc2d062fda66e0e012ad37d2460d83e9b943f556a5"
   solver-name = "gps-cdcl"
   solver-version = 1

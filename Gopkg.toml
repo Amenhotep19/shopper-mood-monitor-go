@@ -5,3 +5,7 @@
 [[constraint]]
   name = "gocv.io/x/gocv"
   version = "0.17.0"
+
+[[constraint]]
+  name = "github.com/eclipse/paho.mqtt.golang"
+  version = "1.1.1"
