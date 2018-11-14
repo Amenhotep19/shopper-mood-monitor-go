@@ -84,11 +84,11 @@ func MQTTClientOptions() (*MQTT.ClientOptions, error) {
 	tlsSkipVerify := os.Getenv("MQTT_TLS_SKIP_VERIFY")
 
 	if server == "" {
-		return nil, fmt.Errorf("MQTT server can't be empty")
+		return nil, fmt.Errorf("MQTT server is empty")
 	}
 
 	if clientID == "" {
-		return nil, fmt.Errorf("MQTT client can't be empty")
+		return nil, fmt.Errorf("MQTT clientID is empty")
 	}
 
 	opts := MQTT.NewClientOptions()

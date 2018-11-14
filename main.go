@@ -136,10 +136,22 @@ func parseCliFlags() error {
 	}
 	// path to sentiment detection model config can't be empty
 	if sentConfig == "" {
-		return fmt.Errorf("Invalid path to .xml file of sentiment detection model configuration: %s", sentConfig)
+		return fmt.Errorf("Invalid path to .xml file of sentiment model configuration: %s", sentConfig)
 	}
 
 	return nil
+}
+
+// getPerformanceInfo queries the Inference Engine performance info and returns it as string
+func getPerformanceInfo(faceNet, sentNet gocv.Net, sentChecked bool) string {
+	freq := gocv.GetTickFrequency() / 1000
+	facePerf := faceNet.GetPerfProfile() / freq
+	var sentPerf float64
+	if sentChecked {
+		sentPerf = sentNet.GetPerfProfile() / freq
+	}
+
+	return fmt.Sprintf("Face inference time: %.2f ms, Sentiment inference time: %.2f ms", facePerf, sentPerf)
 }
 
 // messageRunner reads mqtt message from mqttChan with rate frequency and sends them to MQTT server
@@ -171,12 +183,9 @@ func messageRunner(doneChan <-chan struct{}, mqttChan <-chan Result, c *MQTTClie
 
 // frameRunner reads image frames from framesChan and performs face and sentiment detections on them
 // doneChan is used to receive a signal from the main goroutine to notify frameRunner to stop and return
-func frameRunner(framesChan <-chan *gocv.Mat, doneChan <-chan struct{},
-	resultsChan chan Result, mqttChan chan Result, faceNet, sentNet gocv.Net) error {
-	// TODO: might make these globals/constants
+func frameRunner(framesChan <-chan *gocv.Mat, doneChan <-chan struct{}, resultsChan chan<- Result,
+	perfChan chan<- string, mqttChan chan<- Result, faceNet, sentNet gocv.Net) error {
 	mean := gocv.NewScalar(0, 0, 0, 0)
-	swapRB := false
-	crop := false
 
 	for {
 		select {
@@ -189,7 +198,7 @@ func frameRunner(framesChan <-chan *gocv.Mat, doneChan <-chan struct{},
 			frame.CopyTo(&img)
 
 			// convert img Mat to 672x384 blob that the face detector can analyze
-			blob := gocv.BlobFromImage(img, 1.0, image.Pt(672, 384), mean, swapRB, crop)
+			blob := gocv.BlobFromImage(img, 1.0, image.Pt(672, 384), mean, false, false)
 
 			// feed the blob into the detector
 			faceNet.SetInput(blob, "")
@@ -210,6 +219,9 @@ func frameRunner(framesChan <-chan *gocv.Mat, doneChan <-chan struct{},
 				}
 			}
 
+			// sentChecked is only set to true if at least one face has been detected
+			sentChecked := false
+			// sentMap stores all detected emotions
 			sentMap := make(map[Sentiment]int)
 			// do the sentiment detection here
 			for i := range faces {
@@ -220,7 +232,7 @@ func frameRunner(framesChan <-chan *gocv.Mat, doneChan <-chan struct{},
 
 				// propagate the detected face forward through sentiment network
 				face := img.Region(faces[i])
-				sentBlob := gocv.BlobFromImage(face, 1.0, image.Pt(64, 64), mean, swapRB, crop)
+				sentBlob := gocv.BlobFromImage(face, 1.0, image.Pt(64, 64), mean, false, false)
 				sentNet.SetInput(sentBlob, "")
 				sentResult := sentNet.Forward("")
 				// flatten the result from [1, 5, 1, 1] to [1, 5]
@@ -236,6 +248,7 @@ func frameRunner(framesChan <-chan *gocv.Mat, doneChan <-chan struct{},
 				}
 				sentMap[s] += 1
 
+				sentChecked = true
 				sentBlob.Close()
 				sentResult.Close()
 			}
@@ -245,7 +258,8 @@ func frameRunner(framesChan <-chan *gocv.Mat, doneChan <-chan struct{},
 				Shoppers:   len(faces),
 				Detections: sentMap,
 			}
-			// send results down the results and mqtt channels
+			// send data down the channels
+			perfChan <- getPerformanceInfo(faceNet, sentNet, sentChecked)
 			resultsChan <- result
 			mqttChan <- result
 			img.Close()
@@ -325,6 +339,8 @@ func main() {
 	resultsChan := make(chan Result, 1)
 	// mqttChan is used for collecting MQTT stats
 	mqttChan := make(chan Result, 1)
+	// perfChan is used for collecting performance stats
+	perfChan := make(chan string, 1)
 	// sigChan is used as a handler to stop all the goroutines
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, os.Kill, syscall.SIGTERM)
@@ -336,7 +352,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		errChan <- frameRunner(framesChan, doneChan, resultsChan, mqttChan, faceNet, sentNet)
+		errChan <- frameRunner(framesChan, doneChan, resultsChan, perfChan, mqttChan, faceNet, sentNet)
 	}()
 
 	// create MQTT client and connect to MQTT server
@@ -360,8 +376,9 @@ func main() {
 		defer mqttClient.Disconnect(100)
 	}
 
+	// label will contain
 	var label string
-detector:
+monitor:
 	for {
 		// read image frames from image capture source
 		if ok := vc.Read(&img); !ok {
@@ -371,18 +388,22 @@ detector:
 		if img.Empty() {
 			continue
 		}
-
-		// send image down the pipe for detection
+		// send the captured frame for detection
 		framesChan <- &img
 
 		select {
 		case sig := <-sigChan:
 			fmt.Printf("Shutting down. Got signal: %s\n", sig)
-			break detector
+			break monitor
 		case err = <-errChan:
 			fmt.Printf("Shutting down. Failed with error: %s\n", err)
-			break detector
+			break monitor
 		case result := <-resultsChan:
+			// retrieve the inference performance and print it
+			label = <-perfChan
+			gocv.PutText(&img, label, image.Point{0, 15}, gocv.FontHersheySimplex, 0.5,
+				color.RGBA{0, 0, 0, 0}, 2)
+			// print the inference results label
 			label = fmt.Sprintf("%s", result)
 			gocv.PutText(&img, label, image.Point{0, 40}, gocv.FontHersheySimplex, 0.5,
 				color.RGBA{0, 0, 0, 0}, 2)
@@ -393,7 +414,7 @@ detector:
 		window.WaitKey(1)
 	}
 
-	// signal to all goroutines to finish
+	// signal all goroutines to finish
 	close(doneChan)
 	// wait for all goroutines to finish
 	wg.Wait()
