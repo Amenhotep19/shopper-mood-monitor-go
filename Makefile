@@ -11,7 +11,7 @@ PACKAGES=$(shell go list ./... )
 all: test build
 
 build: dir
-	go build -tags openvino -o "$(BUILDPATH)/monitor" "main.go"
+	go build -tags openvino -o "$(BUILDPATH)/monitor"
 
 dir:
 	mkdir -p $(BUILDPATH)
