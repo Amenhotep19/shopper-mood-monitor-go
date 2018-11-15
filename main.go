@@ -454,7 +454,11 @@ monitor:
 			gocv.FontHersheySimplex, 0.5, color.RGBA{0, 0, 0, 0}, 2)
 		// show the image in the window, and wait 1 millisecond
 		window.IMShow(img)
-		window.WaitKey(1)
+
+		// exit when ESC key is pressed
+		if window.WaitKey(1) == 27 {
+			break monitor
+		}
 	}
 	// signal all goroutines to finish
 	close(doneChan)
