@@ -197,11 +197,77 @@ func messageRunner(doneChan <-chan struct{}, pubChan <-chan *Result, c *MQTTClie
 	return nil
 }
 
+// detectSentiment detects sentiment in img regions defined by faces rectangles
+// It returns a map of counts of detected sentiment for each faces.
+func detectSentiment(net *gocv.Net, img *gocv.Mat, faces []image.Rectangle) map[Sentiment]int {
+	// sentMap maps the counts of each detected face emotion
+	sentMap := make(map[Sentiment]int)
+	// do the sentiment detection here
+	for i := range faces {
+		// make sure the face rect is completely inside the main frame
+		if !faces[i].In(image.Rect(0, 0, img.Cols(), img.Rows())) {
+			continue
+		}
+
+		// propagate the detected face forward through sentiment network
+		face := img.Region(faces[i])
+		blob := gocv.BlobFromImage(face, 1.0, image.Pt(64, 64), gocv.NewScalar(0, 0, 0, 0), false, false)
+
+		// run a forward pass through the network
+		net.SetInput(blob, "")
+		result := net.Forward("")
+
+		// flatten the result from [1, 5, 1, 1] to [1, 5]
+		result = result.Reshape(1, 5)
+		// find the most likely mood in returned list of sentiments
+		_, confidence, _, maxLoc := gocv.MinMaxLoc(result)
+
+		var s Sentiment
+		if float64(confidence) > sentConfidence {
+			s = Sentiment(maxLoc.Y)
+		} else {
+			s = UNKNOWN
+		}
+		sentMap[s] += 1
+
+		blob.Close()
+		result.Close()
+	}
+
+	return sentMap
+}
+
+// detectFaces detects faces in img and returns them as a slice of rectangles that encapsulates them
+func detectFaces(net *gocv.Net, img *gocv.Mat) []image.Rectangle {
+	// convert img Mat to 672x384 blob that the face detector can analyze
+	blob := gocv.BlobFromImage(*img, 1.0, image.Pt(672, 384), gocv.NewScalar(0, 0, 0, 0), false, false)
+	defer blob.Close()
+
+	// run a forward pass through the network
+	net.SetInput(blob, "")
+	results := net.Forward("")
+	defer results.Close()
+
+	// iterate through all detections and append results to faces buffer
+	var faces []image.Rectangle
+	for i := 0; i < results.Total(); i += 7 {
+		confidence := results.GetFloatAt(0, i+2)
+		if float64(confidence) > faceConfidence {
+			left := int(results.GetFloatAt(0, i+3) * float32(img.Cols()))
+			top := int(results.GetFloatAt(0, i+4) * float32(img.Rows()))
+			right := int(results.GetFloatAt(0, i+5) * float32(img.Cols()))
+			bottom := int(results.GetFloatAt(0, i+6) * float32(img.Rows()))
+			faces = append(faces, image.Rect(left, top, right, bottom))
+		}
+	}
+
+	return faces
+}
+
 // frameRunner reads image frames from framesChan and performs face and sentiment detections on them
 // doneChan is used to receive a signal from the main goroutine to notify frameRunner to stop and return
 func frameRunner(framesChan <-chan *gocv.Mat, doneChan <-chan struct{}, resultsChan chan<- *Result,
 	perfChan chan<- *Perf, pubChan chan<- *Result, faceNet, sentNet *gocv.Net) error {
-	mean := gocv.NewScalar(0, 0, 0, 0)
 
 	for {
 		select {
@@ -213,75 +279,34 @@ func frameRunner(framesChan <-chan *gocv.Mat, doneChan <-chan struct{}, resultsC
 			img := gocv.NewMat()
 			frame.CopyTo(&img)
 
-			// convert img Mat to 672x384 blob that the face detector can analyze
-			blob := gocv.BlobFromImage(img, 1.0, image.Pt(672, 384), mean, false, false)
+			// detect faces and return them
+			faces := detectFaces(faceNet, &img)
 
-			// feed the blob into the detector
-			faceNet.SetInput(blob, "")
-
-			// run a forward pass through the network
-			results := faceNet.Forward("")
-
-			// iterate through all detections and append results to faces buffer
-			var faces []image.Rectangle
-			for i := 0; i < results.Total(); i += 7 {
-				confidence := results.GetFloatAt(0, i+2)
-				if float64(confidence) > faceConfidence {
-					left := int(results.GetFloatAt(0, i+3) * float32(img.Cols()))
-					top := int(results.GetFloatAt(0, i+4) * float32(img.Rows()))
-					right := int(results.GetFloatAt(0, i+5) * float32(img.Cols()))
-					bottom := int(results.GetFloatAt(0, i+6) * float32(img.Rows()))
-					faces = append(faces, image.Rect(left, top, right, bottom))
-				}
-			}
-
-			// sentChecked is only set to true if at least one face has been detected
+			// sentChecked is only set to true if at least one sentiment has been detected
 			sentChecked := false
-			// sentMap stores all detected emotions
-			sentMap := make(map[Sentiment]int)
-			// do the sentiment detection here
-			for i := range faces {
-				// make sure the face rect is completely inside the main frame
-				if !faces[i].In(image.Rect(0, 0, img.Cols(), img.Rows())) {
-					continue
-				}
 
-				// propagate the detected face forward through sentiment network
-				face := img.Region(faces[i])
-				sentBlob := gocv.BlobFromImage(face, 1.0, image.Pt(64, 64), mean, false, false)
-				sentNet.SetInput(sentBlob, "")
-				sentResult := sentNet.Forward("")
-				// flatten the result from [1, 5, 1, 1] to [1, 5]
-				sentResult = sentResult.Reshape(1, 5)
-				// find the most likely mood in returned list of sentiments
-				_, confidence, _, maxLoc := gocv.MinMaxLoc(sentResult)
+			// detect sentiment from detected faces
+			sentMap := detectSentiment(sentNet, &img, faces)
 
-				var s Sentiment
-				if float64(confidence) > sentConfidence {
-					s = Sentiment(maxLoc.Y)
-				} else {
-					s = UNKNOWN
-				}
-				sentMap[s] += 1
-
+			if len(sentMap) != 0 {
 				sentChecked = true
-				sentBlob.Close()
-				sentResult.Close()
 			}
 
-			// send result down the channel
+			// detection result
 			result := &Result{
 				Shoppers:   len(faces),
 				Detections: sentMap,
 			}
+
 			// send data down the channels
 			perfChan <- getPerformanceInfo(faceNet, sentNet, sentChecked)
 			resultsChan <- result
 			if pubChan != nil {
 				pubChan <- result
 			}
+
+			// close image matrices
 			img.Close()
-			results.Close()
 		}
 	}
 
