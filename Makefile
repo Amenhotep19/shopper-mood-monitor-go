@@ -4,9 +4,7 @@ INSTALL=go install
 BUILDPATH=./build
 PACKAGES=$(shell go list ./... )
 
-#CGO_CXXFLAGS="--std=c++11"
-#CGO_CPPFLAGS="-I${INTEL_CVSDK_DIR}/opencv/include -I${INTEL_CVSDK_DIR}/deployment_tools/inference_engine/include"
-#CGO_LDFLAGS="-L${INTEL_CVSDK_DIR}/opencv/lib -L${INTEL_CVSDK_DIR}/deployment_tools/inference_engine/lib/ubuntu_16.04/intel64 -lpthread -ldl -ldla -ldliaPlugin -lHeteroPlugin -lMKLDNNPlugin -lmyriadPlugin -linference_engine -lclDNNPlugin -lopencv_core -lopencv_pvl -lopencv_videoio -lopencv_imgproc -lopencv_highgui -lopencv_imgcodecs -lopencv_objdetect -lopencv_features2d -lopencv_video -lopencv_dnn -lopencv_calib3d"
+.PHONY: clean build all godep install
 
 all: test build
 
@@ -17,15 +15,15 @@ dir:
 	mkdir -p $(BUILDPATH)
 
 install:
-	$(INSTALL) ./$(EXDIR)/...
+	$(INSTALL) -tags openvino
 
 clean:
 	rm -rf $(BUILDPATH)/*
 
 godep:
-	go get -u github.com/golang/dep/cmd/dep
+	wget -O- https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
 
-dep: godep
+dep:
 	dep ensure
 
 check:
@@ -38,5 +36,3 @@ test:
 	for pkg in ${PACKAGES}; do \
 		go test -tags openvino -coverprofile="../../../$$pkg/coverage.txt" -covermode=atomic $$pkg || exit; \
 	done
-
-.PHONY: clean build all
