@@ -18,7 +18,7 @@ const (
 	// name is a program name
 	name = "shopper-mood-monitor"
 	// topic is MQTT topic
-	mqttTopic = "retail/traffic"
+	topic = "retail/traffic"
 )
 
 var (
@@ -42,8 +42,10 @@ var (
 	backend int
 	// target is inference target
 	target int
-	// mqttRate is number of seconds between data updates to MQTT server
-	mqttRate int
+	// publish is a flag which instructs the program to publish data analytics
+	publish bool
+	// rate is number of seconds between analytics are collected and sent to a remote server
+	rate int
 )
 
 func init() {
@@ -57,7 +59,8 @@ func init() {
 	flag.Float64Var(&sentConfidence, "sent-confidence", 0.5, "Confidence threshold for sentiment detection")
 	flag.IntVar(&backend, "backend", 0, "Inference backend. 0: Auto, 1: Halide language, 2: Intel DL Inference Engine")
 	flag.IntVar(&target, "target", 0, "Target device. 0: CPU, 1: OpenCL, 2: OpenCL half precision, 3: VPU")
-	flag.IntVar(&mqttRate, "mqtt-rate", 1, "Number of seconds between data updates to MQTT server")
+	flag.BoolVar(&publish, "publish", false, "Publish data analytics to a remote server")
+	flag.IntVar(&rate, "rate", 1, "Number of seconds between analytics are sent to a remote server")
 }
 
 // Sentiment is shopper sentiment
@@ -153,7 +156,7 @@ func (r *Result) ToMQTTMessage() string {
 }
 
 // getPerformanceInfo queries the Inference Engine performance info and returns it as string
-func getPerformanceInfo(faceNet, sentNet gocv.Net, sentChecked bool) *Perf {
+func getPerformanceInfo(faceNet, sentNet *gocv.Net, sentChecked bool) *Perf {
 	freq := gocv.GetTickFrequency() / 1000
 
 	facePerf := faceNet.GetPerfProfile() / freq
@@ -168,23 +171,22 @@ func getPerformanceInfo(faceNet, sentNet gocv.Net, sentChecked bool) *Perf {
 	}
 }
 
-// messageRunner reads mqtt message from mqttChan with rate frequency and sends them to MQTT server
-// doneChan is used to receive a signal from the main goroutine to notify messageRunner to stop and return
-func messageRunner(doneChan <-chan struct{}, mqttChan <-chan *Result, c *MQTTClient, topic string, rate int) error {
+// messageRunner reads data published to pubChan with rate frequency and sends them to remote analytics server
+// doneChan is used to receive a signal from the main goroutine to notify the routine to stop and return
+func messageRunner(doneChan <-chan struct{}, pubChan <-chan *Result, c *MQTTClient, topic string, rate int) error {
 	ticker := time.NewTicker(time.Duration(rate) * time.Second)
 
 	for {
 		select {
 		case <-ticker.C:
-			result := <-mqttChan
+			result := <-pubChan
 			_, err := c.Publish(topic, result.ToMQTTMessage())
 			// TODO: decide whether to return with error and stop program;
 			// For now we just signal there was an error and carry on
 			if err != nil {
 				fmt.Printf("Error publishing message to %s: %v", topic, err)
 			}
-		//case res := <-mqttChan:
-		case <-mqttChan:
+		case <-pubChan:
 			// we discard messages in between ticker times
 		case <-doneChan:
 			fmt.Printf("Stopping messageRunner: received stop sginal\n")
@@ -195,11 +197,77 @@ func messageRunner(doneChan <-chan struct{}, mqttChan <-chan *Result, c *MQTTCli
 	return nil
 }
 
+// detectSentiment detects sentiment in img regions defined by faces rectangles
+// It returns a map of counts of detected sentiment for each faces.
+func detectSentiment(net *gocv.Net, img *gocv.Mat, faces []image.Rectangle) map[Sentiment]int {
+	// sentMap maps the counts of each detected face emotion
+	sentMap := make(map[Sentiment]int)
+	// do the sentiment detection here
+	for i := range faces {
+		// make sure the face rect is completely inside the main frame
+		if !faces[i].In(image.Rect(0, 0, img.Cols(), img.Rows())) {
+			continue
+		}
+
+		// propagate the detected face forward through sentiment network
+		face := img.Region(faces[i])
+		blob := gocv.BlobFromImage(face, 1.0, image.Pt(64, 64), gocv.NewScalar(0, 0, 0, 0), false, false)
+
+		// run a forward pass through the network
+		net.SetInput(blob, "")
+		result := net.Forward("")
+
+		// flatten the result from [1, 5, 1, 1] to [1, 5]
+		result = result.Reshape(1, 5)
+		// find the most likely mood in returned list of sentiments
+		_, confidence, _, maxLoc := gocv.MinMaxLoc(result)
+
+		var s Sentiment
+		if float64(confidence) > sentConfidence {
+			s = Sentiment(maxLoc.Y)
+		} else {
+			s = UNKNOWN
+		}
+		sentMap[s] += 1
+
+		blob.Close()
+		result.Close()
+	}
+
+	return sentMap
+}
+
+// detectFaces detects faces in img and returns them as a slice of rectangles that encapsulates them
+func detectFaces(net *gocv.Net, img *gocv.Mat) []image.Rectangle {
+	// convert img Mat to 672x384 blob that the face detector can analyze
+	blob := gocv.BlobFromImage(*img, 1.0, image.Pt(672, 384), gocv.NewScalar(0, 0, 0, 0), false, false)
+	defer blob.Close()
+
+	// run a forward pass through the network
+	net.SetInput(blob, "")
+	results := net.Forward("")
+	defer results.Close()
+
+	// iterate through all detections and append results to faces buffer
+	var faces []image.Rectangle
+	for i := 0; i < results.Total(); i += 7 {
+		confidence := results.GetFloatAt(0, i+2)
+		if float64(confidence) > faceConfidence {
+			left := int(results.GetFloatAt(0, i+3) * float32(img.Cols()))
+			top := int(results.GetFloatAt(0, i+4) * float32(img.Rows()))
+			right := int(results.GetFloatAt(0, i+5) * float32(img.Cols()))
+			bottom := int(results.GetFloatAt(0, i+6) * float32(img.Rows()))
+			faces = append(faces, image.Rect(left, top, right, bottom))
+		}
+	}
+
+	return faces
+}
+
 // frameRunner reads image frames from framesChan and performs face and sentiment detections on them
 // doneChan is used to receive a signal from the main goroutine to notify frameRunner to stop and return
 func frameRunner(framesChan <-chan *gocv.Mat, doneChan <-chan struct{}, resultsChan chan<- *Result,
-	perfChan chan<- *Perf, mqttChan chan<- *Result, faceNet, sentNet gocv.Net) error {
-	mean := gocv.NewScalar(0, 0, 0, 0)
+	perfChan chan<- *Perf, pubChan chan<- *Result, faceNet, sentNet *gocv.Net) error {
 
 	for {
 		select {
@@ -211,75 +279,34 @@ func frameRunner(framesChan <-chan *gocv.Mat, doneChan <-chan struct{}, resultsC
 			img := gocv.NewMat()
 			frame.CopyTo(&img)
 
-			// convert img Mat to 672x384 blob that the face detector can analyze
-			blob := gocv.BlobFromImage(img, 1.0, image.Pt(672, 384), mean, false, false)
+			// detect faces and return them
+			faces := detectFaces(faceNet, &img)
 
-			// feed the blob into the detector
-			faceNet.SetInput(blob, "")
-
-			// run a forward pass through the network
-			results := faceNet.Forward("")
-
-			// iterate through all detections and append results to faces buffer
-			var faces []image.Rectangle
-			for i := 0; i < results.Total(); i += 7 {
-				confidence := results.GetFloatAt(0, i+2)
-				if float64(confidence) > faceConfidence {
-					left := int(results.GetFloatAt(0, i+3) * float32(img.Cols()))
-					top := int(results.GetFloatAt(0, i+4) * float32(img.Rows()))
-					right := int(results.GetFloatAt(0, i+5) * float32(img.Cols()))
-					bottom := int(results.GetFloatAt(0, i+6) * float32(img.Rows()))
-					faces = append(faces, image.Rect(left, top, right, bottom))
-				}
-			}
-
-			// sentChecked is only set to true if at least one face has been detected
+			// sentChecked is only set to true if at least one sentiment has been detected
 			sentChecked := false
-			// sentMap stores all detected emotions
-			sentMap := make(map[Sentiment]int)
-			// do the sentiment detection here
-			for i := range faces {
-				// make sure the face rect is completely inside the main frame
-				if !faces[i].In(image.Rect(0, 0, img.Cols(), img.Rows())) {
-					continue
-				}
 
-				// propagate the detected face forward through sentiment network
-				face := img.Region(faces[i])
-				sentBlob := gocv.BlobFromImage(face, 1.0, image.Pt(64, 64), mean, false, false)
-				sentNet.SetInput(sentBlob, "")
-				sentResult := sentNet.Forward("")
-				// flatten the result from [1, 5, 1, 1] to [1, 5]
-				sentResult = sentResult.Reshape(1, 5)
-				// find the most likely mood in returned list of sentiments
-				_, confidence, _, maxLoc := gocv.MinMaxLoc(sentResult)
+			// detect sentiment from detected faces
+			sentMap := detectSentiment(sentNet, &img, faces)
 
-				var s Sentiment
-				if float64(confidence) > sentConfidence {
-					s = Sentiment(maxLoc.Y)
-				} else {
-					s = UNKNOWN
-				}
-				sentMap[s] += 1
-
+			if len(sentMap) != 0 {
 				sentChecked = true
-				sentBlob.Close()
-				sentResult.Close()
 			}
 
-			// send result down the channel
+			// detection result
 			result := &Result{
 				Shoppers:   len(faces),
 				Detections: sentMap,
 			}
+
 			// send data down the channels
 			perfChan <- getPerformanceInfo(faceNet, sentNet, sentChecked)
 			resultsChan <- result
-			if mqttChan != nil {
-				mqttChan <- result
+			if pubChan != nil {
+				pubChan <- result
 			}
+
+			// close image matrices
 			img.Close()
-			results.Close()
 		}
 	}
 
@@ -310,6 +337,64 @@ func parseCliFlags() error {
 	return nil
 }
 
+// NewInferModel reads DNN model and it configuration, sets its preferable target and backend and returns it.
+// It returns error if either the model files failed to be read or setting the target fails
+func NewInferModel(model, config string, backend, target int) (*gocv.Net, error) {
+	// read in Face model and set the target
+	m := gocv.ReadNet(model, config)
+
+	if err := m.SetPreferableBackend(gocv.NetBackendType(backend)); err != nil {
+		return nil, err
+	}
+
+	if err := m.SetPreferableTarget(gocv.NetTargetType(target)); err != nil {
+		return nil, err
+	}
+
+	return &m, nil
+}
+
+// NewCapture creates new video capture from input or camera backend if input is empty and returns it.
+// It fails with error if it either can't open the input video file or the video device
+func NewCapture(input string, deviceID int) (*gocv.VideoCapture, error) {
+	if input != "" {
+		// open video file
+		vc, err := gocv.VideoCaptureFile(input)
+		if err != nil {
+			return nil, err
+		}
+
+		return vc, nil
+	}
+
+	// open camera device
+	vc, err := gocv.VideoCaptureDevice(deviceID)
+	if err != nil {
+		return nil, err
+	}
+
+	return vc, nil
+}
+
+// NewMQTTPublisher creates new MQTT client which collects analytics data and publishes them to remote MQTT server.
+// It attempts to make a connection to the remote server and if successful it return the client handler
+// It returns error if either the connection to the remote server failed or if the client config is invalid.
+func NewMQTTPublisher() (*MQTTClient, error) {
+	// create MQTT client and connect to MQTT server
+	opts, err := MQTTClientOptions()
+	if err != nil {
+		return nil, err
+	}
+
+	// create MQTT client ad connect to remote server
+	c, err := MQTTConnect(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return c, nil
+}
+
 func main() {
 	// parse cli flags
 	if err := parseCliFlags(); err != nil {
@@ -317,58 +402,27 @@ func main() {
 		os.Exit(1)
 	}
 
-	// read in Face model and set the backend and target
-	faceNet := gocv.ReadNet(faceModel, faceConfig)
-	if err := faceNet.SetPreferableBackend(gocv.NetBackendType(backend)); err != nil {
-		fmt.Fprintf(os.Stderr, "Error setting backend for Face Network: %v\n", err)
-		os.Exit(1)
-	}
-	if err := faceNet.SetPreferableTarget(gocv.NetTargetType(target)); err != nil {
-		fmt.Fprintf(os.Stderr, "Error setting target for Face Network: %v\n", err)
+	// read in Face model and set its inference backend and target
+	faceNet, err := NewInferModel(faceModel, faceConfig, backend, target)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating Face detection model: %v\n", err)
 		os.Exit(1)
 	}
 
-	// read in Snetiment model and set the backend and target
-	sentNet := gocv.ReadNet(sentModel, sentConfig)
-	if err := sentNet.SetPreferableBackend(gocv.NetBackendType(backend)); err != nil {
-		fmt.Fprintf(os.Stderr, "Error setting backend for Sentiment Network: %v\n", err)
-		os.Exit(1)
-	}
-	if err := sentNet.SetPreferableTarget(gocv.NetTargetType(target)); err != nil {
-		fmt.Fprintf(os.Stderr, "Error setting target for Sentiment Network: %v\n", err)
+	// read in Sentiment model and set its inference backend and target
+	sentNet, err := NewInferModel(sentModel, sentConfig, backend, target)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating Sentiment detection model: %v\n", err)
 		os.Exit(1)
 	}
 
-	// vc is videocapture source: either camera or file
-	var vc *gocv.VideoCapture
-	var err error
-	if input != "" {
-		// open camera device
-		vc, err = gocv.VideoCaptureFile(input)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error opening video capture file: %v\n", input)
-			os.Exit(1)
-		}
-	} else {
-		// open camera device
-		vc, err = gocv.VideoCaptureDevice(deviceID)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error opening video capture device: %v\n", deviceID)
-			os.Exit(1)
-		}
+	// create new video capture
+	vc, err := NewCapture(input, deviceID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating new video capture: %v\n", err)
+		os.Exit(1)
 	}
 	defer vc.Close()
-
-	// open display window
-	window := gocv.NewWindow(name)
-	window.SetWindowProperty(gocv.WindowPropertyAutosize, gocv.WindowAutosize)
-	defer window.Close()
-
-	// prepare input image matrix
-	img := gocv.NewMat()
-	defer img.Close()
-
-	fmt.Printf("Start reading frames from video capture source\n")
 
 	// frames channel provides the source of images to process
 	framesChan := make(chan *gocv.Mat, 1)
@@ -383,40 +437,42 @@ func main() {
 	// sigChan is used as a handler to stop all the goroutines
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, os.Kill, syscall.SIGTERM)
-	// mqttChan is used for collecting MQTT stats; only init if using MQTTT
-	var mqttChan chan *Result
-
+	// pubChan is used for publishing data analytics stats
+	var pubChan chan *Result
 	// waitgroup to synchronise all goroutines
 	var wg sync.WaitGroup
 
-	// create MQTT client and connect to MQTT server
-	opts, err := MQTTClientOptions()
-	if err != nil {
-		fmt.Printf("%v\n", err)
-		fmt.Printf("Have you set the ENV variables?\n")
-	} else {
-		// initialize mqttChan channel here
-		mqttChan = make(chan *Result, 1)
-		mqttClient, err := MQTTConnect(opts)
+	if publish {
+		p, err := NewMQTTPublisher()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to connect to MQTT broker %s: %v\n", opts.Servers[0], err)
+			fmt.Fprintf(os.Stderr, "Failed to create MQTT publisher: %v\n", err)
 			os.Exit(1)
 		}
+		pubChan = make(chan *Result, 1)
 		// start MQTT worker goroutine
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			errChan <- messageRunner(doneChan, mqttChan, mqttClient, mqttTopic, mqttRate)
+			errChan <- messageRunner(doneChan, pubChan, p, topic, rate)
 		}()
-		defer mqttClient.Disconnect(100)
+		defer p.Disconnect(100)
 	}
 
 	// start frameRunner goroutine
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		errChan <- frameRunner(framesChan, doneChan, resultsChan, perfChan, mqttChan, faceNet, sentNet)
+		errChan <- frameRunner(framesChan, doneChan, resultsChan, perfChan, pubChan, faceNet, sentNet)
 	}()
+
+	// open display window
+	window := gocv.NewWindow(name)
+	window.SetWindowProperty(gocv.WindowPropertyAutosize, gocv.WindowAutosize)
+	defer window.Close()
+
+	// prepare input image matrix
+	img := gocv.NewMat()
+	defer img.Close()
 
 	// initialize the result pointers
 	result := new(Result)
