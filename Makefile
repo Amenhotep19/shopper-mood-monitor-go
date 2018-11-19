@@ -24,7 +24,7 @@ godep:
 	wget -O- https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
 
 dep:
-	dep ensure
+	dep ensure -v
 
 check:
 	for pkg in ${PACKAGES}; do \

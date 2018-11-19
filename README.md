@@ -75,6 +75,20 @@ You must configure the environment to use the IntelÂ® Distribution of OpenVINOâ„
     source /opt/intel/computer_vision_sdk/bin/setupvars.sh
 ```
 
+### Docker
+
+You can also build and run the program as a Docker container, however in order to use the multistage build and skip unnecessary stages the minimum required Docker version is `18.06 `. Use the `Dockerfile` present in the root directory of the project and build the docker image by running the following command:
+
+```
+DOCKER_BUILDKIT=1 docker build --target="openvino-go-app" -t shopper-mood-go .
+```
+
+This will produce a docker image called `shopper-mood-go` which contains the built binary in it. Since the built docker image has an [ENTRYPOINT](https://docs.docker.com/engine/reference/builder/#entrypoint) defined you can run the image as an executable as follows:
+
+```
+docker run -it --rm shopper-mood-go -h
+```
+
 ## Building the Code
 
 Start by changing the current directory to wherever you have git cloned the application code. For example:
