@@ -26,17 +26,17 @@ var (
 	deviceID int
 	// input is path to image or video file
 	input string
-	// faceModel is path to .bin file of model containing face recognizer
+	// faceModel is path to .bin file of face detection model
 	faceModel string
-	// faceConfig is path to .xml file of model containing model configuration
+	// faceConfig is path to .xml file of face detection model configuration
 	faceConfig string
-	// faceConfidence is confidence factor for face detection
+	// faceConfidence is confidence threshold for face detection model
 	faceConfidence float64
-	// sentModel is path to .bin file of sentiment model
+	// sentModel is path to .bin file of sentiment detection model
 	sentModel string
-	// sentConfig is path to .xml file of sentiment model containing model configuration
+	// sentConfig is path to .xml of sentiment detection model configuration
 	sentConfig string
-	// sentConfidence is confidence factor for sentiment detection
+	// sentConfidence is confidence threshold for sentiment detection model
 	sentConfidence float64
 	// backend is inference backend
 	backend int
@@ -75,8 +75,8 @@ const (
 	SAD
 	// SURPRISED is for detecting neutral emotion
 	SURPRISED
-	// ANGER  is for detecting anger emotion
-	ANGER
+	// ANGRY  is for detecting anger emotion
+	ANGRY
 	// UNKNOWN is catchall unidentifiable emotion
 	UNKNOWN
 )
@@ -92,8 +92,8 @@ func (s Sentiment) String() string {
 		return "SAD"
 	case SURPRISED:
 		return "SURPRISED"
-	case ANGER:
-		return "ANGER"
+	case ANGRY:
+		return "ANGRY"
 	default:
 		return "UNKNOWN"
 	}
@@ -127,7 +127,7 @@ func (r *Result) initDetectionsMap() {
 	r.Detections[HAPPY] = 0
 	r.Detections[SAD] = 0
 	r.Detections[SURPRISED] = 0
-	r.Detections[ANGER] = 0
+	r.Detections[ANGRY] = 0
 	r.Detections[UNKNOWN] = 0
 }
 
@@ -140,7 +140,7 @@ func (r *Result) String() string {
 
 	return fmt.Sprintf("Shoppers: %d, Neutral: %d, Happy: %d, Sad: %d, Surprised: %d, Anger: %d, Unknown: %d",
 		r.Shoppers, r.Detections[NEUTRAL], r.Detections[HAPPY], r.Detections[SAD],
-		r.Detections[SURPRISED], r.Detections[ANGER], r.Detections[UNKNOWN])
+		r.Detections[SURPRISED], r.Detections[ANGRY], r.Detections[UNKNOWN])
 }
 
 // ToMQTTMessage turns result into MQTT message which can be published to MQTT broker
@@ -152,7 +152,7 @@ func (r *Result) ToMQTTMessage() string {
 
 	return fmt.Sprintf("{\"shoppers\": \"%d\", \"neutral\": \"%d\", \"happy\": \"%d\", \"sad\": \"%d\", \"surprised\": \"%d\", \"anger\": \"%d\", \"unknown\": \"%d\"}",
 		r.Shoppers, r.Detections[NEUTRAL], r.Detections[HAPPY], r.Detections[SAD],
-		r.Detections[SURPRISED], r.Detections[ANGER], r.Detections[UNKNOWN])
+		r.Detections[SURPRISED], r.Detections[ANGRY], r.Detections[UNKNOWN])
 }
 
 // getPerformanceInfo queries the Inference Engine performance info and returns it as string

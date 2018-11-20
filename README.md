@@ -82,12 +82,20 @@ Start by changing the current directory to wherever you have git cloned the appl
     cd shopper-mood-monitor-go
 ```
 
-Before you try to build the program you need to export some environment variables in order to use the `OpenVINO` libraries with `GoCV`. You can do that by running the `env.sh` script that is in the project root directory:
+Before you can build the program you need to fetch its dependencies. You can do that by running the commands below. The first one fetches `Go` depedency manager of our choice and the latter uses it to satisfy the program's depdencies as defined in `Gopkg.lock` file:
+
 ```
-    source env.sh
+make godep
+make dep
 ```
 
-Now you are ready to build the binary. The project ships a simple `Makefile` which makes building the program easy by invoking the `build` task from the project root as follows:
+Once you have fetched the dependencies you must export a few environment variables required to build the library from the fetched dependencies. Run the following command from the project directory:
+
+```
+    source vendor/gocv.io/x/gocv/openvino/env.sh
+```
+
+Now you are ready to build the program binary. The project ships a simple `Makefile` which makes building the program easy by invoking the `build` task from the project root as follows:
 ```
     make build
 ```
@@ -105,10 +113,11 @@ To run the application with the needed models using the webcam:
 ```
     ./build/monitor -face-model=/opt/intel/computer_vision_sdk/deployment_tools/intel_models/face-detection-adas-0001/FP32/face-detection-adas-0001.bin -face-config=/opt/intel/computer_vision_sdk/deployment_tools/intel_models/face-detection-adas-0001/FP32/face-detection-adas-0001.xml -sent-model=/opt/intel/computer_vision_sdk/deployment_tools/intel_models/emotions-recognition-retail-0003/FP32/emotions-recognition-retail-0003.bin -sent-config=/opt/intel/computer_vision_sdk/deployment_tools/intel_models/emotions-recognition-retail-0003/FP32/emotions-recognition-retail-0003.xml
 ```
+The user can choose different confidence levels for both face and emotion detection by using `-face-confidence` and `-sent-confidence`. command line parameters. By default, both of these parameters are set to `0.5` i.e. at least `50%` confidence is required in order for the returned inference result to be considered valid.
 
 ### Docker
 
-You can also build and run the program in a Docker container. First you need to build a Docker image. Use the `Dockerfile` present in the cloned repository and build the docker image by running the following command:
+You can also build a Docker image and then run the program in a Docker container. First you need to build the image. You can use the `Dockerfile` present in the cloned repository and build the Docker image by running the following command:
 
 ```
 docker build -t shopper-mood-go .
@@ -126,7 +135,7 @@ If you'd like to know how you can take advantage of more advanced build system p
 
 ### Hardware Acceleration
 
-This application can take advantage of the hardware acceleration in the Intel® Distribution of OpenVINO™ toolkit by using the `-b` and `-t` parameters.
+This application can take advantage of the hardware acceleration in the Intel® Distribution of OpenVINO™ toolkit by using the `-backend, -b` and `-target, -t` parameters.
 
 For example, to use the Intel® Distribution of OpenVINO™ toolkit backend with the GPU in 32-bit mode you need to set the `-backend` flag to `2` and `-target` flag to `1`:
 ```
@@ -145,7 +154,7 @@ To run the code using the VPU, you have to set the `-target` flag to `3` and als
 
 ## Sample videos
 
-There are several videos available to use as sample videos to show the capabilities of this application. You can download them by running these commands from the `shopper-mood-monitor` directory:
+There are several videos available to use as sample videos to show the capabilities of this application. You can download them by running these commands from the `shopper-mood-monitor-go` directory:
 ```
     mkdir resources
     cd resources
@@ -154,7 +163,7 @@ There are several videos available to use as sample videos to show the capabilit
     cd ..
 ```
 
-To then execute the code using one of these sample videos, run the following commands from the `shopper-mood-monitor` directory:
+To then execute the code using one of these sample videos, run the following commands from the `shopper-mood-monitor-go` directory:
 ```
     ./build/monitor -face-model=/opt/intel/computer_vision_sdk/deployment_tools/intel_models/face-detection-adas-0001/FP32/face-detection-adas-0001.bin -face-config=/opt/intel/computer_vision_sdk/deployment_tools/intel_models/face-detection-adas-0001/FP32/face-detection-adas-0001.xml -sent-model=/opt/intel/computer_vision_sdk/deployment_tools/intel_models/emotions-recognition-retail-0003/FP32/emotions-recognition-retail-0003.bin -sent-config=/opt/intel/computer_vision_sdk/deployment_tools/intel_models/emotions-recognition-retail-0003/FP32/emotions-recognition-retail-0003.xml -input=./resources/face-demographics-walking-and-pause.mp4
 ```
