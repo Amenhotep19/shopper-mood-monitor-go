@@ -1,6 +1,6 @@
-# Building shopper mood monitor docker images in Microsoft Azure Cloud
+# Building shopper shopper mood monitor docker images in Microsoft Azure Cloud
 
-This is a short step by step tutorial about how to build [docker](https://docker.com) image for `mood-shopper-go` application in [Microsoft Azure](https://azure.microsoft.com/) Cloud and make it available in [Azure Container Registry (ACR)](https://docs.microsoft.com/en-us/azure/container-registry/).
+This is a short step by step tutorial about how to build [docker](https://docker.com) image for `shopper-mood-monitor-go` application in [Microsoft Azure](https://azure.microsoft.com/) Cloud and make it available in [Azure Container Registry (ACR)](https://docs.microsoft.com/en-us/azure/container-registry/).
 
 ## Prerequisities
 
@@ -44,7 +44,7 @@ With Azure Container Registry running on your account you can now proceed with b
 
 ## Build docker image and push to ACR
 
-You are now ready to build a `docker` image for `mood-shopper-go` application and stored it in the ACR you had built earlier. We assume you have already cloned the `mood-shopper-go` git repository as per instructions in [README](./README.md).
+You are now ready to build a `docker` image for `shopper-mood-monitor-go` application and stored it in the ACR you had built earlier. We assume you have already cloned the `shopper-mood-monitor-go` git repository as per instructions in [README](./README.md).
 
 First you need to log in to the ACR you built earlier:
 ```
