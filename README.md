@@ -106,6 +106,24 @@ To run the application with the needed models using the webcam:
     ./build/monitor -face-model=/opt/intel/computer_vision_sdk/deployment_tools/intel_models/face-detection-adas-0001/FP32/face-detection-adas-0001.bin -face-config=/opt/intel/computer_vision_sdk/deployment_tools/intel_models/face-detection-adas-0001/FP32/face-detection-adas-0001.xml -sent-model=/opt/intel/computer_vision_sdk/deployment_tools/intel_models/emotions-recognition-retail-0003/FP32/emotions-recognition-retail-0003.bin -sent-config=/opt/intel/computer_vision_sdk/deployment_tools/intel_models/emotions-recognition-retail-0003/FP32/emotions-recognition-retail-0003.xml
 ```
 
+### Docker
+
+You can also build and run the program in a Docker container. First you need to build a Docker image. Use the `Dockerfile` present in the cloned repository and build the docker image by running the following command:
+
+```
+docker build -t shopper-mood-go .
+```
+
+This will produce a docker image called `shopper-mood-go` which contains the built binary. Since the built docker image has an [ENTRYPOINT](https://docs.docker.com/engine/reference/builder/#entrypoint) defined you can run the image as an executable using the following command:
+
+```
+docker run -it --rm shopper-mood-go -h
+```
+
+### Azure
+
+If you'd like to know how you can take advantage of more advanced build system provided by [Microsoft Azure Cloud](https://azure.microsoft.com/) , please check out the Azure guide [here](./azure.md). Following the steps in the guide you can build Docker container and push it into Azure Container Registry to make it available online.
+
 ### Hardware Acceleration
 
 This application can take advantage of the hardware acceleration in the Intel® Distribution of OpenVINO™ toolkit by using the `-b` and `-t` parameters.
