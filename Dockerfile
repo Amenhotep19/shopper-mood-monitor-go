@@ -17,24 +17,6 @@ RUN wget -O /tmp/openvino.tar.gz ${OPENVINO_DOWNLOAD_URL} && \
         ./install.sh -s silent.cfg && \
         rm -rf /tmp/l_openvino*
 
-######################
-#  OpenVINO C++ app  #
-######################
-FROM openvino AS openvino-cpp-app
-LABEL maintainer="Hybridgroup"
-
-WORKDIR /app
-COPY . ./
-RUN chmod +x build.sh && \
-            ./build.sh "c++"
-
-COPY docker-entrypoint.sh /usr/local/bin/
-RUN ln -s usr/local/bin/docker-entrypoint.sh / && \
-            chmod +x /usr/local/bin/docker-entrypoint.sh
-
-ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["-h"]
-
 ###################
 #  Go + OpenVINO  #
 ###################
