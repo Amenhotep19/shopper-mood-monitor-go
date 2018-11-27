@@ -15,7 +15,7 @@ Before you can start building `docker` images you need to create a container reg
 
 Go ahead and login to your Azure account and create a new resource group by running the commands below:
 
-```
+```shell
 az login
 ```
 
@@ -23,19 +23,19 @@ This will open a browser window and prompts you for you Azure password. Once you
 
 Pick a geographic location that suits your current geography. You can get a list of location as follows:
 
-```
+```shell
 az account list-locations
 ```
 
 For this tutorial we will work with assumption youre based in `westeurope`. Go ahead and create Azure Resource Group now:
 
-```
+```shell
 az group create --name myResourceGroup --location westeurope
 ```
 
 Now that you have created resource group, you can proceed by creating Azure Container Registry which will store all docker images and make them available for download. Note that you need to pick a **unique** name for your registry:
 
-```
+```shell
 az acr create --resource-group myResourceGroup --name myOpenVinoGocv --sku Standard
 ```
 
@@ -47,14 +47,15 @@ With Azure Container Registry running on your account you can now proceed with b
 You are now ready to build a `docker` image for `shopper-mood-monitor-go` application and stored it in the ACR you had built earlier. We assume you have already cloned the `shopper-mood-monitor-go` git repository as per instructions in [README](./README.md).
 
 First you need to log in to the ACR you built earlier:
-```
+
+```shell
 az acr login --name myOpenVinoGocv
 Login Succeeded
 ```
 
 You can list all available ACRs in your Azure account:
 
-```
+```shell
 az acr list --resource-group myResourceGroup --query "[].{acrLoginServer:loginServer}" --output table
 AcrLoginServer
 -------------------------
@@ -63,18 +64,19 @@ myopenvinogocv.azurecr.io
 
 Before you are able to build and push new docker images into the ACR you need to allow access to it. There is a full documetation about Role Based Access Control using Azure AD which you can read about online. For the purpose of this guide we will grant ourselves **admin** privileges i.e. full read/write access:
 
-```
+```shell
 az acr update --name myOpenVinoGocv --admin-enabled true
 ```
 
 Now for the final part, we can build a docker image and automatically upload it to our ACR by running the command below:
 
-```
+```shell
 az acr build --resource-group myResourceGroup --registry myOpenVinoGocv --image shopper-mood-monitor-go .
 ```
 
 If everything went fine you should see the output similar to the one below:
-```
+
+```shell
 The following dependencies were found:
 - image:
     registry: myopenvinogocv.azurecr.io
@@ -96,13 +98,14 @@ Run ID: cb2 was successful after 7m3s
 
 Now you are ready to run the example wherever you have `docker` cli available as follows. Note that the docker image tag contains a DNS name pointing to ACR printed in the output shown above under `registry` key:
 
-```
+```shell
 docker run -it --rm myopenvinogocv.azurecr.io/shopper-mood-monitor-go -h
 ```
 
-## Destrouy Azure environment
+## Destroy Azure environment
 
 If you no longer need ACR you can easily remove all the resources by deleting particular resource group as follows:
-```
+
+```shell
 az group delete --name myResourceGroup
 ```
