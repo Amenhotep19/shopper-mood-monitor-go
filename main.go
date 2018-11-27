@@ -121,6 +121,8 @@ type Result struct {
 	Shoppers int
 	// Detections is a map which contains detected sentiment of each shopper
 	Detections map[Sentiment]int
+	// Perf is DNN inference speed performance
+	Perf *Perf
 }
 
 // initDetectionsMap initializes Result Detections map to zero values
@@ -270,7 +272,10 @@ func detectFaces(net *gocv.Net, img *gocv.Mat) []image.Rectangle {
 // frameRunner reads image frames from framesChan and performs face and sentiment detections on them
 // doneChan is used to receive a signal from the main goroutine to notify frameRunner to stop and return
 func frameRunner(framesChan <-chan *frame, doneChan <-chan struct{}, resultsChan chan<- *Result,
-	perfChan chan<- *Perf, pubChan chan<- *Result, faceNet, sentNet *gocv.Net) error {
+	pubChan chan<- *Result, faceNet, sentNet *gocv.Net) error {
+
+	// allocate perf once
+	perf := new(Perf)
 
 	for {
 		select {
@@ -295,14 +300,16 @@ func frameRunner(framesChan <-chan *frame, doneChan <-chan struct{}, resultsChan
 				sentChecked = true
 			}
 
+			perf = getPerformanceInfo(faceNet, sentNet, sentChecked)
+
 			// detection result
 			result := &Result{
 				Shoppers:   len(faces),
 				Detections: sentMap,
+				Perf:       perf,
 			}
 
 			// send data down the channels
-			perfChan <- getPerformanceInfo(faceNet, sentNet, sentChecked)
 			resultsChan <- result
 			if pubChan != nil {
 				pubChan <- result
@@ -445,8 +452,6 @@ func main() {
 	doneChan := make(chan struct{})
 	// resultsChan is used for detection distribution
 	resultsChan := make(chan *Result, 1)
-	// perfChan is used for collecting performance stats
-	perfChan := make(chan *Perf, 1)
 	// sigChan is used as a handler to stop all the goroutines
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, os.Kill, syscall.SIGTERM)
@@ -475,7 +480,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		errChan <- frameRunner(framesChan, doneChan, resultsChan, perfChan, pubChan, faceNet, sentNet)
+		errChan <- frameRunner(framesChan, doneChan, resultsChan, pubChan, faceNet, sentNet)
 	}()
 
 	// open display window
@@ -489,7 +494,6 @@ func main() {
 
 	// initialize the result pointers
 	result := new(Result)
-	perf := new(Perf)
 
 monitor:
 	for {
@@ -511,12 +515,11 @@ monitor:
 			fmt.Printf("Shutting down. Encountered error: %s\n", err)
 			break monitor
 		case result = <-resultsChan:
-			perf = <-perfChan
 		default:
 			// do nothing; just display latest results
 		}
 		// inference performance and print it
-		gocv.PutText(&img, fmt.Sprintf("%s", perf), image.Point{0, 15},
+		gocv.PutText(&img, fmt.Sprintf("%s", result.Perf), image.Point{0, 15},
 			gocv.FontHersheySimplex, 0.5, color.RGBA{0, 0, 0, 0}, 2)
 		// inference results label
 		gocv.PutText(&img, fmt.Sprintf("%s", result), image.Point{0, 40},
@@ -526,8 +529,16 @@ monitor:
 
 		// exit when ESC key is pressed
 		if window.WaitKey(int(delay)) >= 0 {
+			fmt.Printf("Attempting to shut down: ESC pressed\n")
 			break monitor
 		}
+	}
+
+	// unblock resultsChan if necessary
+	select {
+	case <-resultsChan:
+	default:
+		// resultsChan was empty, proceed
 	}
 	// signal all goroutines to finish
 	close(doneChan)
