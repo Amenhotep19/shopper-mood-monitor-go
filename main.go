@@ -186,8 +186,7 @@ func messageRunner(doneChan <-chan struct{}, pubChan <-chan *Result, c *MQTTClie
 		case <-ticker.C:
 			result := <-pubChan
 			_, err := c.Publish(topic, result.ToMQTTMessage())
-			// TODO: decide whether to return with error and stop program;
-			// For now we just signal there was an error and carry on
+			// Just signal there was an error and carry on
 			if err != nil {
 				fmt.Printf("Error publishing message to %s: %v", topic, err)
 			}
@@ -198,8 +197,6 @@ func messageRunner(doneChan <-chan struct{}, pubChan <-chan *Result, c *MQTTClie
 			return nil
 		}
 	}
-
-	return nil
 }
 
 // detectSentiment detects sentiment in img regions defined by faces rectangles
@@ -233,7 +230,7 @@ func detectSentiment(net *gocv.Net, img *gocv.Mat, faces []image.Rectangle) map[
 		} else {
 			s = UNKNOWN
 		}
-		sentMap[s] += 1
+		sentMap[s]++
 
 		blob.Close()
 		result.Close()
@@ -319,8 +316,6 @@ func frameRunner(framesChan <-chan *frame, doneChan <-chan struct{}, resultsChan
 			img.Close()
 		}
 	}
-
-	return nil
 }
 
 func parseCliFlags() error {
@@ -409,7 +404,7 @@ func NewMQTTPublisher() (*MQTTClient, error) {
 	return c, nil
 }
 
-// frame ise used to send video frames and program configuration to upstream goroutines
+// frame is used to send video frames and program configuration to upstream goroutines
 type frame struct {
 	// img is image frame
 	img *gocv.Mat
@@ -457,7 +452,7 @@ func main() {
 	signal.Notify(sigChan, os.Interrupt, os.Kill, syscall.SIGTERM)
 	// pubChan is used for publishing data analytics stats
 	var pubChan chan *Result
-	// waitgroup to synchronise all goroutines
+	// waitgroup to synchronize all goroutines
 	var wg sync.WaitGroup
 
 	if publish {
