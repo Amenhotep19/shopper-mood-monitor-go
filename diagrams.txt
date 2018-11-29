@@ -22,17 +22,20 @@ subgraph cloud
 S[MQTT Server]
 end
 subgraph local
-subgraph Frame thread
-Q[Take next available frame from queue]-->F[Look for faces using DNN]
+subgraph Frame goroutine
+Q[Get next available image frame from frame channel]-->F[Look for faces using DNN]
 F-->P[Check sentiment using DNN]
-P-->U[Update stats]
+P-->U[Update display results stats channel]
+U-->UP[Update publish results channel *OPTIONAL]
 end
-subgraph Main thread
-C[Capture frames]-->MQ[Add to queue]
-MQ-->W[Window with display including stats]
+subgraph Main goroutine
+C[Capture frames]-->MQ[Add to frame channel]
+MQ-->W[Window with display including results stats]
+DC[Get stats from display results channel]-->W
 end
-subgraph Messaging thread
-M[Send MQTT messages to server with stats]-- optional -->S
+subgraph Messaging goroutine *OPTIONAL
+SC[Get stats from publish results channel]-->M
+M[Send MQTT messages to server with results stats]-->S
 end
 end
 
