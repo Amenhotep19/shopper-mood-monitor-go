@@ -10,7 +10,7 @@
 
 ## Introduction
 
-This shopper mood monitor application is one of a series of reference implementations for Computer Vision (CV) using the Intel® Distribution of OpenVINO™ toolkit. This application is designed for a retail shelf mounted camera system that counts the the number of passers-by that look toward the display to capture their mood which is classified into 5 emotions:
+This shopper mood monitor application is one of a series of reference implementations for Computer Vision (CV) using the Intel® Distribution of OpenVINO™ toolkit written in the Go programming language. This application is designed for a retail shelf mounted camera system that counts the the number of passers-by that look toward the display to capture their mood which is classified into 5 emotions:
 
 - Neutral
 - Happy
@@ -25,9 +25,11 @@ It is intended to provide real-world marketing statistics for in-store shopping 
 ## Requirements
 
 ### Hardware
+
 * 6th Generation Intel® Core™ processor with Intel® Iris® Pro graphics and Intel® HD Graphics
 
 ### Software
+
 * [Ubuntu\* 16.04 LTS](http://releases.ubuntu.com/16.04/)
 *Note*: You must be running kernel version 4.7+ to use this software. We recommend using a 4.14+ kernel to use this software. Run the following command to determine your kernel version:
 
@@ -37,16 +39,55 @@ uname -a
 
 * OpenCL™ Runtime Package
 * Intel® Distribution of OpenVINO™ toolkit
-
-Go programming language requirements here...
+* Go programming language v1.11+
 
 ## Setup
 
 ### Install OpenVINO™ Toolkit
+
 Refer to https://software.intel.com/en-us/articles/OpenVINO-Install-Linux for more information about how to install and setup the Intel® Distribution of OpenVINO™ toolkit.
 
 You will need the OpenCL™ Runtime package if you plan to run inference on the GPU as shown by the
 instructions below. It is not mandatory for CPU inference.
+
+### Install Go
+
+You must install the Go programming language version 1.11+ in order to compile this application. You can obtain the latest compiler from the Go website's download page at https://golang.org/dl/
+
+For an excellent introduction to the Go programming language, check out the online tour at https://tour.golang.org
+
+### Download the reference platform code using Git
+
+You can download the reference platform code onto your computer by using the following Git command:
+
+```shell
+git clone https://github.com/intel-iot-devkit/shopper-mood-monitor-go.git
+```
+
+Then, change the current directory to where you have git cloned the application code to continue the installation steps:
+
+```shell
+cd shopper-mood-monitor-go
+```
+
+### Install Dep
+
+This sample uses the `dep` dependency tool for Go. You can download and install it by running the following command:
+
+```shell
+make godep
+
+```
+
+### Install GoCV
+
+Once you have installed Go, you must also install the GoCV package which contains the Go programming language wrappers for OpenVINO, and the associated dependencies. The easiest way to do this is by using the `dep` tool, which will satisfy the program's dependencies as defined in `Gopkg.lock` file. Run the following make file task to do so:
+
+```shell
+make dep
+```
+
+Now you should be ready to build and run the reference platform application code.
 
 ## How it Works
 
@@ -85,13 +126,6 @@ Start by changing the current directory to wherever you have git cloned the appl
 
 ```shell
 cd shopper-mood-monitor-go
-```
-
-Before you can build the program you need to fetch its dependencies. You can do that by running the commands below. The first one fetches `Go` depedency manager of our choice and the latter uses it to satisfy the program's depdencies as defined in `Gopkg.lock` file:
-
-```shell
-make godep
-make dep
 ```
 
 Once you have fetched the dependencies you must export a few environment variables required to build the library from the fetched dependencies. Run the following command from the project directory:
