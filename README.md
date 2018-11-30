@@ -158,24 +158,6 @@ To run the application with the needed models using the webcam:
 
 The user can choose different confidence levels for both face and emotion detection by using `-face-confidence` and `-sent-confidence`. command line parameters. By default, both of these parameters are set to `0.5` i.e. at least `50%` confidence is required in order for the returned inference result to be considered valid.
 
-### Docker
-
-You can also build a Docker image and then run the program in a Docker container. First you need to build the image. You can use the `Dockerfile` present in the cloned repository and build the Docker image by running the following command:
-
-```shell
-docker build -t shopper-mood-go .
-```
-
-This will produce a docker image called `shopper-mood-go` which contains the built binary. Since the built docker image has an [ENTRYPOINT](https://docs.docker.com/engine/reference/builder/#entrypoint) defined you can run the image as an executable using the following command:
-
-```shell
-docker run -it --rm shopper-mood-go -h
-```
-
-### Azure
-
-If you'd like to know how you can take advantage of more advanced build system provided by [Microsoft Azure Cloud](https://azure.microsoft.com/), please check out the Azure guide [here](./azure.md). Following the steps in the guide you can build a Docker container and push it into Azure Container Registry to make it available online.
-
 ### Hardware Acceleration
 
 This application can take advantage of the hardware acceleration in the Intel® Distribution of OpenVINO™ toolkit by using the `-backend, -b` and `-target, -t` parameters.
@@ -240,3 +222,21 @@ If you want to monitor the MQTT messages sent to your local server, and you have
 ```shell
 mosquitto_sub -t 'retail/traffic'
 ```
+
+### Docker
+
+You can also build a Docker image and then run the program in a Docker container. First you need to build the image. You can use the `Dockerfile` present in the cloned repository and build the Docker image by running the following command:
+
+```shell
+docker build -t shopper-mood-go .
+```
+
+This will produce a docker image called `shopper-mood-go` which contains the built binary. Since the built docker image has an [ENTRYPOINT](https://docs.docker.com/engine/reference/builder/#entrypoint) defined you can run the image as an executable using the following command:
+
+```shell
+docker run -it --rm shopper-mood-go -h
+```
+
+### Microsoft Azure
+
+If you'd like to know how you can take advantage of more advanced build system provided by [Microsoft Azure Cloud](https://azure.microsoft.com/), please check out the Azure guide [here](./azure.md). Following the steps in the guide you can build a Docker container and push it into Azure Container Registry to make it available online.
