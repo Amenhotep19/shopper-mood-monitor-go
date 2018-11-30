@@ -198,7 +198,7 @@ To then execute the code using one of these sample videos, run the following com
 ./build/monitor -face-model=/opt/intel/computer_vision_sdk/deployment_tools/intel_models/face-detection-adas-0001/FP32/face-detection-adas-0001.bin -face-config=/opt/intel/computer_vision_sdk/deployment_tools/intel_models/face-detection-adas-0001/FP32/face-detection-adas-0001.xml -sent-model=/opt/intel/computer_vision_sdk/deployment_tools/intel_models/emotions-recognition-retail-0003/FP32/emotions-recognition-retail-0003.bin -sent-config=/opt/intel/computer_vision_sdk/deployment_tools/intel_models/emotions-recognition-retail-0003/FP32/emotions-recognition-retail-0003.xml -input=./resources/face-demographics-walking-and-pause.mp4
 ```
 
-### Machine to Machine Messaging with MQTT
+## Machine to Machine Messaging with MQTT
 
 If you wish to use a MQTT server to publish data, you should set the following environment variables before running the program:
 
@@ -223,7 +223,7 @@ If you want to monitor the MQTT messages sent to your local server, and you have
 mosquitto_sub -t 'retail/traffic'
 ```
 
-### Docker
+## Docker
 
 You can also build a Docker image and then run the program in a Docker container. First you need to build the image. You can use the `Dockerfile` present in the cloned repository and build the Docker image by running the following command:
 
@@ -237,6 +237,6 @@ This will produce a docker image called `shopper-mood-go` which contains the bui
 docker run -it --rm shopper-mood-go -h
 ```
 
-### Microsoft Azure
+## Microsoft Azure
 
 If you'd like to know how you can take advantage of more advanced build system provided by [Microsoft Azure Cloud](https://azure.microsoft.com/), please check out the Azure guide [here](./azure.md). Following the steps in the guide you can build a Docker container and push it into Azure Container Registry to make it available online.
