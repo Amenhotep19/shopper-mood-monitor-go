@@ -1,6 +1,6 @@
-# Building shopper shopper mood monitor docker images in Microsoft Azure Cloud
+# Building Docker Images in Microsoft Azure Cloud
 
-This is a short step by step tutorial about how to build [docker](https://docker.com) image for `shopper-mood-monitor-go` application in [Microsoft Azure](https://azure.microsoft.com/) Cloud and make it available in [Azure Container Registry (ACR)](https://docs.microsoft.com/en-us/azure/container-registry/).
+This is a short step by step tutorial about how to build [Docker](https://docker.com) image for `shopper-mood-monitor-go` application in [Microsoft Azure](https://azure.microsoft.com/) Cloud and make it available in [Azure Container Registry (ACR)](https://docs.microsoft.com/en-us/azure/container-registry/).
 
 ## Prerequisities
 
@@ -50,6 +50,11 @@ First you need to log in to the ACR you built earlier:
 
 ```shell
 az acr login --name myOpenVinoGocv
+```
+
+You should see the output that your login was successful:
+
+```shell
 Login Succeeded
 ```
 
@@ -57,6 +62,11 @@ You can list all available ACRs in your Azure account:
 
 ```shell
 az acr list --resource-group myResourceGroup --query "[].{acrLoginServer:loginServer}" --output table
+```
+
+You should see output that looks something like this:
+
+```shell
 AcrLoginServer
 -------------------------
 myopenvinogocv.azurecr.io
@@ -68,10 +78,34 @@ Before you are able to build and push new docker images into the ACR you need to
 az acr update --name myOpenVinoGocv --admin-enabled true
 ```
 
-Now for the final part, we can build a docker image and automatically upload it to our ACR by running the command below:
+```shell
+{
+  "adminUserEnabled": true,
+  "creationDate": "2018-12-04T13:35:38.338340+00:00",
+  "id": "/subscriptions/someguidhere/resourceGroups/myResourceGroup/providers/Microsoft.ContainerRegistry/registries/myOpenVinoGocv",
+  "location": "westeurope",
+  "loginServer": "myopenvinogocv.azurecr.io",
+  "name": "myOpenVinoGocv",
+  "provisioningState": "Succeeded",
+  "resourceGroup": "myResourceGroup",
+  "sku": {
+    "name": "Standard",
+    "tier": "Standard"
+  },
+  "status": null,
+  "storageAccount": null,
+  "tags": {},
+  "type": "Microsoft.ContainerRegistry/registries"
+}
+```
+
+If you have have not yet not done so, obtain your own unique download URL for the Intel distribution of OpenVINO toolkit as described in the main README under "Docker".
+
+Now for the final part, we can build a Docker image and automatically upload it to our ACR by running the command below, substituting your own unique download URL:
+
 
 ```shell
-az acr build --resource-group myResourceGroup --registry myOpenVinoGocv --image shopper-mood-monitor-go .
+az acr build --resource-group myResourceGroup --registry myOpenVinoGocv --image shopper-mood-monitor-go --build-arg OPENVINO_DOWNLOAD_URL=[your unique OpenVINO download URL here] .
 ```
 
 If everything went fine you should see the output similar to the one below:

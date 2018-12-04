@@ -227,7 +227,7 @@ mosquitto_sub -t 'retail/traffic'
 
 You can also build a Docker image and then run the program in a Docker container. First you need to build the image. You can use the `Dockerfile` present in the cloned repository and build the Docker image.
 
-First you must obtain your own unique download URL for OpenVINO. Follow the registration process if you have not yet done so. In the registration email you have received a link to the Intel Registration Center website download page, shown here:
+First you must obtain your own unique download URL for the Intel distribution of OpenVINO toolkit. Follow the registration process if you have not yet done so. In the registration email you have received a link to the Intel Registration Center website download page, shown here:
 
 ![OpenVINO download page](./images/openvino-download.png)
 
