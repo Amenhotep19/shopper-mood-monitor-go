@@ -271,6 +271,9 @@ func detectFaces(net *gocv.Net, img *gocv.Mat) []image.Rectangle {
 func frameRunner(framesChan <-chan *frame, doneChan <-chan struct{}, resultsChan chan<- *Result,
 	pubChan chan<- *Result, faceNet, sentNet *gocv.Net) error {
 
+	// frame is image frame
+	// we want to avoid continuous allocation that lead to GC pauses
+	frame := new(frame)
 	// allocate perf once
 	perf := new(Perf)
 
@@ -278,8 +281,17 @@ func frameRunner(framesChan <-chan *frame, doneChan <-chan struct{}, resultsChan
 		select {
 		case <-doneChan:
 			fmt.Printf("Stopping frameRunner: received stop sginal\n")
+			// lose results channel
+			close(resultsChan)
+			// close publish channel
+			if pubChan != nil {
+				close(pubChan)
+			}
 			return nil
-		case frame := <-framesChan:
+		case frame = <-framesChan:
+			if frame == nil {
+				continue
+			}
 			// let's make a copy of the original
 			img := gocv.NewMat()
 			frame.img.CopyTo(&img)
@@ -528,15 +540,13 @@ monitor:
 			break monitor
 		}
 	}
-
-	// unblock resultsChan if necessary
-	select {
-	case <-resultsChan:
-	default:
-		// resultsChan was empty, proceed
-	}
 	// signal all goroutines to finish
+	close(framesChan)
 	close(doneChan)
+	// unblock frameRunner by emptying resultsChan if need be
+	for range resultsChan {
+		// collect any outstanding results
+	}
 	// wait for all goroutines to finish
 	wg.Wait()
 }
