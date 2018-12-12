@@ -535,7 +535,7 @@ monitor:
 		window.IMShow(img)
 
 		// exit when ESC key is pressed
-		if window.WaitKey(int(delay)) >= 0 {
+		if window.WaitKey(int(delay)) == 27 {
 			fmt.Printf("Attempting to shut down: ESC pressed\n")
 			break monitor
 		}
