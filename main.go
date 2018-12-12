@@ -1,3 +1,26 @@
+/*
+* Copyright (c) 2018 Intel Corporation.
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
 package main
 
 import (
@@ -84,7 +107,7 @@ const (
 	UNKNOWN
 )
 
-// String implements fmt.Stringer interface for Sentiment
+// String implements fmt.Stringer interface for Sentiment.
 func (s Sentiment) String() string {
 	switch s {
 	case NEUTRAL:
@@ -102,30 +125,30 @@ func (s Sentiment) String() string {
 	}
 }
 
-// Perf stores inference engine performance info
+// Perf stores inference engine performance info.
 type Perf struct {
-	// FaceNet stores face detector performance info
+	// FaceNet stores face detector performance info.
 	FaceNet float64
-	// SnetNet stores sentiment detector performance info
+	// SentNet stores sentiment detector performance info.
 	SentNet float64
 }
 
-// String implements fmt.Stringer interface for Perf
+// String implements fmt.Stringer interface for Perf.
 func (p *Perf) String() string {
 	return fmt.Sprintf("Face inference time: %.2f ms, Sentiment inference time: %.2f ms", p.FaceNet, p.SentNet)
 }
 
-// Result is inference result
+// Result is inference result.
 type Result struct {
-	// Shoppers contains count of all detected faces of shoppers
+	// Shoppers contains count of all detected faces of shoppers.
 	Shoppers int
-	// Detections is a map which contains detected sentiment of each shopper
+	// Detections is a map which contains detected sentiment of each shopper.
 	Detections map[Sentiment]int
-	// Perf is DNN inference speed performance
+	// Perf is DNN inference speed performance.
 	Perf *Perf
 }
 
-// initDetectionsMap initializes Result Detections map to zero values
+// initDetectionsMap initializes Result Detections map to zero values.
 func (r *Result) initDetectionsMap() {
 	r.Detections = make(map[Sentiment]int)
 	r.Detections[NEUTRAL] = 0
@@ -136,7 +159,7 @@ func (r *Result) initDetectionsMap() {
 	r.Detections[UNKNOWN] = 0
 }
 
-// String implements fmt.Stringer interface for Result
+// String implements fmt.Stringer interface for Result.
 func (r *Result) String() string {
 	// if the map is empty, initialize all keys to zero values
 	if r.Detections == nil {
@@ -148,7 +171,7 @@ func (r *Result) String() string {
 		r.Detections[SURPRISED], r.Detections[ANGRY], r.Detections[UNKNOWN])
 }
 
-// ToMQTTMessage turns result into MQTT message which can be published to MQTT broker
+// ToMQTTMessage turns result into MQTT message which can be published to MQTT broker.
 func (r *Result) ToMQTTMessage() string {
 	// if the map is empty, initialize all keys to zero values
 	if r.Detections == nil {
@@ -160,7 +183,7 @@ func (r *Result) ToMQTTMessage() string {
 		r.Detections[SURPRISED], r.Detections[ANGRY], r.Detections[UNKNOWN])
 }
 
-// getPerformanceInfo queries the Inference Engine performance info and returns it as string
+// getPerformanceInfo queries the Inference Engine performance info and returns it as string.
 func getPerformanceInfo(faceNet, sentNet *gocv.Net, sentChecked bool) *Perf {
 	freq := gocv.GetTickFrequency() / 1000
 
@@ -221,6 +244,7 @@ func detectSentiment(net *gocv.Net, img *gocv.Mat, faces []image.Rectangle) map[
 
 		// flatten the result from [1, 5, 1, 1] to [1, 5]
 		result = result.Reshape(1, 5)
+
 		// find the most likely mood in returned list of sentiments
 		_, confidence, _, maxLoc := gocv.MinMaxLoc(result)
 
@@ -274,6 +298,7 @@ func frameRunner(framesChan <-chan *frame, doneChan <-chan struct{}, resultsChan
 	// frame is image frame
 	// we want to avoid continuous allocation that lead to GC pauses
 	frame := new(frame)
+
 	// allocate perf once
 	perf := new(Perf)
 
@@ -281,9 +306,7 @@ func frameRunner(framesChan <-chan *frame, doneChan <-chan struct{}, resultsChan
 		select {
 		case <-doneChan:
 			fmt.Printf("Stopping frameRunner: received stop sginal\n")
-			// lose results channel
 			close(resultsChan)
-			// close publish channel
 			if pubChan != nil {
 				close(pubChan)
 			}
@@ -292,6 +315,7 @@ func frameRunner(framesChan <-chan *frame, doneChan <-chan struct{}, resultsChan
 			if frame == nil {
 				continue
 			}
+
 			// let's make a copy of the original
 			img := gocv.NewMat()
 			frame.img.CopyTo(&img)
@@ -331,7 +355,6 @@ func frameRunner(framesChan <-chan *frame, doneChan <-chan struct{}, resultsChan
 }
 
 func parseCliFlags() error {
-	// parse cli flags
 	flag.Parse()
 
 	// path to face detection model can't be empty
@@ -357,7 +380,6 @@ func parseCliFlags() error {
 // NewInferModel reads DNN model and it configuration, sets its preferable target and backend and returns it.
 // It returns error if either the model files failed to be read or setting the target fails
 func NewInferModel(model, config string, backend, target int) (*gocv.Net, error) {
-	// read in Face model and set the target
 	m := gocv.ReadNet(model, config)
 
 	if err := m.SetPreferableBackend(gocv.NetBackendType(backend)); err != nil {
@@ -401,13 +423,11 @@ func NewCapture(input string, deviceID int, delay *float64) (*gocv.VideoCapture,
 // It attempts to make a connection to the remote server and if successful it returns the client handler.
 // It returns error if either the connection to the remote server failed or if the client config is invalid.
 func NewMQTTPublisher() (*MQTTClient, error) {
-	// create MQTT client and connect to MQTT server
 	opts, err := MQTTClientOptions()
 	if err != nil {
 		return nil, err
 	}
 
-	// create MQTT client ad connect to remote server
 	c, err := MQTTConnect(opts)
 	if err != nil {
 		return nil, err
@@ -453,17 +473,23 @@ func main() {
 
 	// frames channel provides the source of images to process
 	framesChan := make(chan *frame, 1)
+
 	// errChan is a channel used to capture program errors
 	errChan := make(chan error, 2)
+
 	// doneChan is used to signal goroutines they need to stop
 	doneChan := make(chan struct{})
+
 	// resultsChan is used for detection distribution
 	resultsChan := make(chan *Result, 1)
+
 	// sigChan is used as a handler to stop all the goroutines
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, os.Kill, syscall.SIGTERM)
+
 	// pubChan is used for publishing data analytics stats
 	var pubChan chan *Result
+
 	// waitgroup to synchronize all goroutines
 	var wg sync.WaitGroup
 
@@ -474,6 +500,7 @@ func main() {
 			os.Exit(1)
 		}
 		pubChan = make(chan *Result, 1)
+
 		// start MQTT worker goroutine
 		wg.Add(1)
 		go func() {
@@ -525,12 +552,15 @@ monitor:
 		default:
 			// do nothing; just display latest results
 		}
+
 		// inference performance and print it
 		gocv.PutText(&img, fmt.Sprintf("%s", result.Perf), image.Point{0, 15},
 			gocv.FontHersheySimplex, 0.5, color.RGBA{0, 0, 0, 0}, 2)
+
 		// inference results label
 		gocv.PutText(&img, fmt.Sprintf("%s", result), image.Point{0, 40},
 			gocv.FontHersheySimplex, 0.5, color.RGBA{0, 0, 0, 0}, 2)
+
 		// show the image in the window, and wait 1 millisecond
 		window.IMShow(img)
 
@@ -540,13 +570,16 @@ monitor:
 			break monitor
 		}
 	}
+
 	// signal all goroutines to finish
 	close(framesChan)
 	close(doneChan)
+
 	// unblock frameRunner by emptying resultsChan if need be
 	for range resultsChan {
 		// collect any outstanding results
 	}
+
 	// wait for all goroutines to finish
 	wg.Wait()
 }
