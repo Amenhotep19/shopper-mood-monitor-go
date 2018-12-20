@@ -56,8 +56,6 @@ You must install the Go programming language version 1.11+ in order to compile t
 
 For an excellent introduction to the Go programming language, check out the online tour at https://tour.golang.org
 
-### Download the reference platform code using Git
-
 ### Download the reference platform code using "go get"
 
 You can download the reference platform code onto your computer by using the following Go command:
