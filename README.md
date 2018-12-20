@@ -58,16 +58,18 @@ For an excellent introduction to the Go programming language, check out the onli
 
 ### Download the reference platform code using Git
 
-You can download the reference platform code onto your computer by using the following Git command:
+### Download the reference platform code using "go get"
+
+You can download the reference platform code onto your computer by using the following Go command:
 
 ```shell
-git clone https://github.com/intel-iot-devkit/shopper-mood-monitor-go.git
+go get -d github.com/intel-iot-devkit/shopper-mood-monitor-go
 ```
 
-Then, change the current directory to where you have git cloned the application code to continue the installation steps:
+Then, change the current directory to where you have installed the application code to continue the installation steps:
 
 ```shell
-cd shopper-mood-monitor-go
+cd $GOPATH/src/github.com/intel-iot-devkit/shopper-mood-monitor-go
 ```
 
 ### Install Dep
@@ -125,7 +127,7 @@ source /opt/intel/computer_vision_sdk/bin/setupvars.sh
 Start by changing the current directory to wherever you have git cloned the application code. For example:
 
 ```shell
-cd shopper-mood-monitor-go
+cd $GOPATH/src/github.com/intel-iot-devkit/shopper-mood-monitor-go
 ```
 
 Once you have fetched the dependencies you must export a few environment variables required to build the library from the fetched dependencies. Run the following command from the project directory:
@@ -231,7 +233,7 @@ First you must obtain your own unique download URL for the Intel distribution of
 
 ![OpenVINO download page](./images/openvino-download.png)
 
-First, navigate to the download page using the link you have received. On the download page, use the "Choose Product to Download" selection box and select "Intel Distribution of OpenVINO toolkit for Linux". Next, using the "Choose a Version" selection box, select "2018 R4". The "Choose a Download Option" section should appear. Right click on the button "Full Package" and choose "Copy Link Address". Your clipboard should now contain your unique OpenVINO download URL. Save this URL somewhere safe.
+First, navigate to the download page using the link you have received. On the download page, use the "Choose Product to Download" selection box and select "Intel Distribution of OpenVINO toolkit for Linux". Next, using the "Choose a Version" selection box, select "2018 R5". The "Choose a Download Option" section should appear. Right click on the button "Full Package" and choose "Copy Link Address". Your clipboard should now contain your unique OpenVINO download URL. Save this URL somewhere safe.
 
 Now you can build your unique Docker image by running the following command, substituting the actual URL you obtained in the previous step:
 
