@@ -3,14 +3,14 @@
 | Details            |              |
 |-----------------------|---------------|
 | Target OS:            |  Ubuntu\* 16.04 LTS   |
-| Programming Language: |  Go |
+| Programming Language: |  Go* |
 | Time to Complete:    |  45 min     |
 
 ![app image](./images/shopper-mood-monitor.png)
 
 ## Introduction
 
-This shopper mood monitor application is one of a series of reference implementations for Computer Vision (CV) using the Intel® Distribution of OpenVINO™ toolkit written in the Go programming language. This application is designed for a retail shelf mounted camera system that counts the the number of passers-by that look toward the display to capture their mood which is classified into 5 emotions:
+This shopper mood monitor application is one of a series of reference implementations for Computer Vision (CV) using the Intel® Distribution of OpenVINO™ toolkit written in the Go* programming language. This application is designed for a retail shelf mounted camera system that counts the the number of passers-by that look toward the display. Their mood is captured, and is classified into 5 emotions:
 
 - Neutral
 - Happy
@@ -26,7 +26,7 @@ It is intended to provide real-world marketing statistics for in-store shopping 
 
 ### Hardware
 
-* 6th Generation Intel® Core™ processor with Intel® Iris® Pro graphics and Intel® HD Graphics
+* 6th Generation Intel® Core™ processor with Iris® Pro graphics and Intel® HD Graphics
 
 ### Software
 
@@ -43,14 +43,13 @@ uname -a
 
 ## Setup
 
-### Install OpenVINO™ Toolkit
+### Install Intel® Distribution of OpenVINO™ toolkit
 
 Refer to https://software.intel.com/en-us/articles/OpenVINO-Install-Linux for more information about how to install and setup the Intel® Distribution of OpenVINO™ toolkit.
 
-You will need the OpenCL™ Runtime package if you plan to run inference on the GPU as shown by the
-instructions below. It is not mandatory for CPU inference.
+You will need the OpenCL™ Runtime package if you plan to run inference on the GPU as shown by the instructions below. It is not mandatory for CPU inference.
 
-### Install Go
+### Install Go*
 
 You must install the Go programming language version 1.11+ in order to compile this application. You can obtain the latest compiler from the Go website's download page at https://golang.org/dl/
 
@@ -81,7 +80,7 @@ make godep
 
 ### Install GoCV
 
-Once you have installed Go, you must also install the GoCV (https://gocv.io/) package which contains the Go programming language wrappers for OpenVINO, and the associated dependencies. The easiest way to do this is by using the `dep` tool, which will satisfy the program's dependencies as defined in `Gopkg.lock` file. Run the following make file task to do so:
+Once you have installed Go, you must also install the GoCV (https://gocv.io/) package which contains the Go programming language wrappers for the Intel® Distribution of OpenVINO™ toolkit, and the associated dependencies. The easiest way to do this is by using the `dep` tool, which will satisfy the program's dependencies as defined in `Gopkg.lock` file. Run the following make file task to do so:
 
 ```shell
 make dep
@@ -91,9 +90,9 @@ Now you should be ready to build and run the reference platform application code
 
 ## How it Works
 
-The application uses a video source, such as a camera, to grab frames, and then uses 2 different Deep Neural Networks (DNNs) to process the data. The first network looks for faces, and then if successful is counted as a "shopper"
+The application uses a video source, such as a camera, to grab frames, and then uses 2 different Deep Neural Networks (DNNs) to process the data. The first network looks for faces, and then if successful, counts the face as a "shopper"
 
-A second neural network is then used to determine the emotion for each detected face if the person's head is facing towards the camera.
+A second neural network is then used to determine the emotion for each detected face, if the person's head is facing towards the camera.
 
 The data can then optionally be sent to a MQTT machine to machine messaging server, as part of a retail data analytics system.
 
@@ -223,15 +222,15 @@ If you want to monitor the MQTT messages sent to your local server, and you have
 mosquitto_sub -t 'retail/traffic'
 ```
 
-## Docker
+## Docker*
 
-You can also build a Docker image and then run the program in a Docker container. First you need to build the image. You can use the `Dockerfile` present in the cloned repository and build the Docker image.
+You can also build a Docker* image and then run the program in a Docker container. First you need to build the image. You can use the `Dockerfile` present in the cloned repository and build the Docker image.
 
-First you must obtain your own unique download URL for the Intel distribution of OpenVINO toolkit. Follow the registration process if you have not yet done so. In the registration email you have received a link to the Intel Registration Center website download page, shown here:
+First you must obtain your own unique download URL for the Intel® Distribution of OpenVINO™ toolkit. Follow the registration process if you have not yet done so. In the registration email you have received a link to the Registration Center website download page, shown here:
 
 ![OpenVINO download page](./images/openvino-download.png)
 
-First, navigate to the download page using the link you have received. On the download page, use the "Choose Product to Download" selection box and select "Intel Distribution of OpenVINO toolkit for Linux". Next, using the "Choose a Version" selection box, select "2018 R5". The "Choose a Download Option" section should appear. Right click on the button "Full Package" and choose "Copy Link Address". Your clipboard should now contain your unique OpenVINO download URL. Save this URL somewhere safe.
+First, navigate to the download page using the link you have received. On the download page, use the "Choose Product to Download" selection box and select "Intel® Distribution of OpenVINO™ toolkit for Linux". Next, using the "Choose a Version" selection box, select "2018 R5". The "Choose a Download Option" section should appear. Right click on the button "Full Package" and choose "Copy Link Address". Your clipboard should now contain your unique download URL. Save this URL somewhere safe.
 
 Now you can build your unique Docker image by running the following command, substituting the actual URL you obtained in the previous step:
 
@@ -239,13 +238,13 @@ Now you can build your unique Docker image by running the following command, sub
 docker build -t shopper-mood-go --build-arg OPENVINO_DOWNLOAD_URL=[your unique OpenVINO download URL here] .
 ```
 
-This will produce a docker image called `shopper-mood-go` which contains the built binary. Since the built docker image has an [ENTRYPOINT](https://docs.docker.com/engine/reference/builder/#entrypoint) defined you can run the image as an executable using the following command:
+This will produce a Docker image called `shopper-mood-go` which contains the built binary. Since the built Docker image has an [ENTRYPOINT](https://docs.docker.com/engine/reference/builder/#entrypoint) defined you can run the image as an executable using the following command:
 
 ```shell
 docker run -it --rm shopper-mood-go -h
 ```
 
-To run the docker image on an Ubuntu host machine using an attached camera, run the following commands:
+To run the Docker image on an Ubuntu host machine using an attached camera, run the following commands:
 
 ```shell
 xhost +local:docker
@@ -253,7 +252,7 @@ docker run --device=/dev/video0:/dev/video0 -v /tmp/.X11-unix:/tmp/.X11-unix -e 
 xhost -local:docker
 ```
 
-To run the docker image on an Ubuntu host machine using a file input, run the following commands:
+To run the Docker image on an Ubuntu host machine using a file input, run the following commands:
 
 ```shell
 xhost +local:docker
@@ -261,6 +260,6 @@ docker run -v ${PWD}/resources:/resources -v /tmp/.X11-unix:/tmp/.X11-unix -e DI
 xhost -local:docker
 ```
 
-## Microsoft Azure
+## Microsoft Azure*
 
-If you'd like to know how you can take advantage of more advanced build system provided by [Microsoft Azure Cloud](https://azure.microsoft.com/), please check out the Azure guide [here](./azure.md). Following the steps in the guide you can build a Docker container and push it into Azure Container Registry to make it available online.
+If you'd like to know how you can take advantage of more advanced build system provided by [Microsoft Azure* Cloud](https://azure.microsoft.com/), please check out the Microsoft Azure* guide [here](./azure.md). Following the steps in the guide you can build a Docker container and push it into Azure Container Registry to make it available online.
